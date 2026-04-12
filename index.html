@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>POF Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ââ Variables âââââââââââââââââââââââââââââââââââââââ */
+:root {
+  --bg:          #FFFFFF;
+  --surface:     #F7F7F5;
+  --surface-2:   #F0F0ED;
+  --border:      #E8E8E5;
+  --border-2:    #D5D5D0;
+  --text:        #191919;
+  --text-2:      #6B6B6B;
+  --text-3:      #9B9B9B;
+  --blue:        #0066FF;
+  --blue-bg:     #EEF4FF;
+  --blue-hover:  #0052CC;
+  --purple:      #6E43E6;
+  --purple-bg:   #F3F0FF;
+  --purple-hover:#5934C7;
+  --green:       #0B8A4A;
+  --green-bg:    #EEFBF4;
+  --red:         #D92D20;
+  --red-bg:      #FFF2F0;
+  --radius:      5px;
+  --radius-lg:   8px;
+  --font-ui:     'Plus Jakarta Sans', sans-serif;
+  --font-mono:   'JetBrains Mono', monospace;
+  --transition:  120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+body { display: flex; flex-direction: column; overflow: hidden; }
+
+/* ââ Loading overlay ââââââââââââââââââââââââââââââââ */
+#loading {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 10px; z-index: 100;
+}
+#loading.hidden { display: none; }
+.loading-spinner {
+  width: 20px; height: 20px;
+  border: 2px solid var(--border-2);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.loading-text { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+
+/* ââ Tab bar âââââââââââââââââââââââââââââââââââââââââ */
+.tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+  flex-shrink: r-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.loading-text { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+
+/* ââ Tab bar âââââââââââââââââââââââââââââââââââââââââ */
+.tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+  flex-shrink: 0; background: var(--bg);
+}
+.tab {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  gap: 5px; padding: 10px 4px;
+  font-family: var(--font-ui); font-size: 12px; font-weight: 500;
+  color: var(--text-3); background: none; border: none;
+  border-bottom: 2px solid transparent; cursor: pointer;
+  transition: color var(--transition), border-color var(--transition);
+  margin-bottom: -1px; letter-spacing: 0.01em;
+}
+.tab:hover { color: var(--text-2); }
+.tab.active { color: var(--text); border-bottom-color: var(--blue); font-weight: 600; }
+.tab.active .tab-icon { color: var(--blue); }
+.tab-icon { display: flex; align-items: center; flex-shrink: 0; transition: color var(--transition); }
+.tab-icon svg { width: 14px; height: 14px; }
+
+/* ââ Panels ââââââââââââââââââââââââââââââââââââââââââ */
+.panel {
+  display: none; flex-direction: column; gap: 0;
+  flex: 1; overflow-y: auto; padding: 14px 14px 20px;
+}
+.panel.active { display: flex; }
+
+/* ââ Field group âââââââââââââââââââââââââââââââââââââ */
+.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+.field:last-child { margin-bottom: 0; }
+.label {
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
+  user-select: none;
+}
+input[type="text"], input[type="email"], input[type="url"], textarea, select {
+  font-family: var(--font-ui); font-size: 12.5px; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 7px 9px; width: 100%;
+  outline: none;
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+  -webkit-appearance: none;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--blue); background: var(--bg);
+  box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.12);
+}
+textarea { resize: vertical; min-height: 72px; line-height: 1.55; }
+input::placeholder, textarea::placeholder { color: var(--text-3); }
+
+/* ââ Execution toggle ââââââââââââââââââââââââââââââââ */
+.exec-toggle { display: flex; gap: 5px; }
+.exec-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  gap: 5px; padding: 7px 8px; font-family: var(--font-ui); font-size: 12px;
+  font-weight: 500; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--text-2); cursor: pointer;
+  transition: all var(--transition); user-select: none;
+}
+.exec-btn:hover { border-color: var(--border-2); color: var(--text); }
+.exec-btn.active-human {
+  background: var(--blue-bg); border-color: rgba(0,102,255,0.3);
+  color: var(--blue); font-weight: 600;
+}
+.exec-btn.active-ai {
+  background: var(--purple-bg); border-color: rgba(110,67,230,0.3);
+  color: var(--purple); font-weight: 600;
+}
+.exec-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+/* ââ Priority âââââââââââââââââââââââââââââââââââââââ */
+.prio-row { display: flex; gap: 5px; }
+.prio-btn {
+  flex: 1; text-align: center; padding: 6px 4px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--text-3); cursor: pointer;
+  transition: all var(--transition); user-select: none;
+}
+.prio-btn:hover { border-color: var(--border-2); color: var(--text-2); }
+.prio-btn.p1.on { background: #FFF5F5; border-color: rgba(217,45,32,0.3); color: var(--red); }
+.prio-btn.p2.on { background: #FFFAEB; border-color: rgba(180,130,0,0.3); color: #B48200; }
+.prio-btn.p3.on { background: var(--surface); border-color: var(--border-2); color: var(--text-2); }
+
+/* ââ AI notice âââââââââââââââââââââââââââââââââââââââ */
+.ai-notice {
+  display: none; background: var(--purple-bg);
+  border: 1px solid rgba(110,67,230,0.2); border-radius: var(--radius);
+  padding: 8px 10px; margin-bottom: 10px;
+}
+.ai-notice.show { display: flex; align-items: flex-start; gap: 7px; }
+.ai-notice-icon { flex-shrink: 0; margin-top: 1px; color: var(--purple); }
+.ai-notice-icon svg { width: 12px; height: 12px; }
+.ai-notice-text { font-size: 11px; color: var(--purple); line-height: 1.45; }
+
+/* ââ Separator âââââââââââââââââââââââââââââââââââââââ */
+.sep { height: 1px; background: var(--border); margin: 12px 0; }
+
+/* ââ Primary button ââââââââââââââââââââââââââââââââââ */
+.btn-primary {
+  width: 100%; padding: 9px 14px; font-family: var(--font-ui);
+  font-size: 12.5px; font-weight: 600; color: #fff; background: var(--blue);
+  border: none; border-radius: var(--radius); cursor: pointer;
+  transition: background var(--transition), transform var(--transition), opacity var(--transition);
+  letter-spacing: 0.01em;
+}
+.btn-primary:hover:not(:disabled) { background: var(--blue-hover); }
+.btn-primary:active:not(:disabled) { transform: scale(0.99); }
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-primary.ai-mode { background: var(--purple); }
+.btn-primary.ai-mode:hover:not(:disabled) { background: var(--purple-hover); }
+
+/* ââ Ghost button ââââââââââââââââââââââââââââââââââââ */
+.btn-ghost {
+  width: 100%; padding: 7px 10px; font-family: var(--font-ui); font-size: 12px;
+  font-weight: 500; color: var(--text-2); background: none;
+  border: 1px dashed var(--border-2); border-radius: var(--radius); cursor: pointer;
+  transition: all var(--transition); display: flex; align-items: center;
+  justify-content: center; gap: 5px;
+}
+.btn-ghost:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
+.btn-ghost svg { width: 12px; height: 12px; }
+
+/* ââ Status banner âââââââââââââââââââââââââââââââââââ */
+.status {
+  display: none; align-items: flex-start; gap: 7px; padding: 9px 10px;
+  border-radius: var(--radius); font-size: 12px; line-height: 1.45; margin-bottom: 10px;
+}
+.status.show { display: flex; }
+.status.ok   { background: var(--green-bg); color: var(--green); }
+.status.err  { background: var(--red-bg);   color: var(--red); }
+.status.info { background: var(--blue-bg);  color: var(--blue); }
+.status-icon { flex-shrink: 0; padding-top: 1px; }
+.status-icon svg { width: 13px; height: 13px; }
+.status a { color: inherit; font-weight: 600; }
+
+/* ââ Contact cards âââââââââââââââââââââââââââââââââââ */
+.results { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.contact-card {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 9px 10px; background: var(--bg);
+  transition: border-color var(--transition), background var(--transition);
+}
+.contact-card:hover { border-color: var(--border-2); background: var(--surface); }
+.card-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; margin-bottom: 3px;
+}
+.card-name { font-weight: 600; font-size: 12.5px; }
+.card-open {
+  font-family: var(--font-mono); font-size: 9.5px; color: var(--blue);
+  text-decoration: none; flex-shrink: 0; opacity: 0; transition: opacity var(--transition);
+}
+.contact-card:hover .card-open { opacity: 1; }
+.card-meta { font-size: 11.5px; color: var(--text-2); }
+.card-types { margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap; }
+.type-badge {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.04em;
+  padding: 2px 6px; border-radius: 3px; background: var(--surface-2);
+  color: var(--text-2); white-space: nowrap;
+}
+.no-results { font-size: 12px; color: var(--text-3); padding: 6px 0; font-style: italic; }
+
+/* ââ New person form âââââââââââââââââââââââââââââââââ */
+.new-person {
+  display: none; flex-direction: column; gap: 10px; padding: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); margin-top: 2px;
+}
+.new-person.show { display: flex; }
+.new-person-header {
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
+}
+.type-select { display: flex; flex-wrap: wrap; gap: 4px; }
+.type-chip {
+  padding: 4px 9px; font-size: 11px; border: 1px solid var(--border);
+  border-radius: 20px; background: var(--bg); color: var(--text-2);
+  cursor: pointer; transition: all var(--transition); user-select: none;
+}
+.type-chip.on {
+  background: var(--blue-bg); border-color: rgba(0,102,255,0.3);
+  color: var(--blue); font-weight: 500;
+}
+
+/* ââ Search row ââââââââââââââââââââââââââââââââââââââ */
+.search-wrap { display: flex; gap: 5px; }
+.search-wrap input { flex: 1; }
+.search-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; flex-shrink: 0; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; color: var(--text-2); transition: all var(--transition);
+}
+.search-btn:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
+.search-btn svg { width: 13px; height: 13px; }
+
+/* ââ Spinner âââââââââââââââââââââââââââââââââââââââââ */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid currentColor; border-top-color: transparent;
+  border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+
+<!-- ââ Loading overlay âââââââââââââââââââââââââââââââââ -->
+<div id="loading">
+  <div class="loading-spinner"></div>
+  <span class="loading-text">Chargementâ¦</span>
+</div>
+
+<!-- ââ Tabs ââââââââââââââââââââââââââââââââââââââââââââ -->
+<div class="tabs">
+  <button class="tab active" id="tab-task" onclick="showTab('task')">
+    <span class="tab-icon">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 8l2 2 4-4"/><rect x="2" y="2" width="12" height="12" rx="2"/>
+      </svg>
+    </span>
+    TÃ¢che
+  </button>
+  <button class="tab" id="tab-contact" onclick="showTab('contact')">
+    <span class="tab-icon">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="8" cy="5.5" r="2.5"/><path d="M3 13c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
+      </svg>
+    </span>
+    Contact
+  </button>
+</div>
+
+<!-- âââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<!--  PANEL TÃCHE                                        -->
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<div class="panel active" id="panel-task">
+
+  <div class="status" id="task-status">
+    <span class="status-icon"></span>
+    <span class="status-text"></span>
+  </div>
+
+  <div class="ai-notice" id="ai-notice">
+    <span class="ai-notice-icon">
+      <svg viewBox="0 0 12 12" fill="currentColor">
+        <circle cx="6" cy="6" r="5.5" fill="none" stroke="currentColor" stroke-width="1"/>
+        <text x="6" y="9" text-anchor="middle" font-size="7" font-family="sans-serif">i</text>
+      </svg>
+    </span>
+    <span class="ai-notice-text">
+      La tÃ¢che sera crÃ©Ã©e en <strong>Brouillon</strong> pour validation avant exÃ©cution IA.
+    </span>
+  </div>
+
+  <div class="field">
+    <span class="label">TÃ¢che</span>
+    <input type="text" id="task-name" placeholder="Nom de la tÃ¢cheâ¦">
+  </div>
+
+  <div class="field">
+    <span class="label">Lien conversation</span>
+    <input type="url" id="task-url" placeholder="https://mail.missiveapp.com/â¦">
+  </div>
+
+  <div class="field">
+    <span class="label">Prompt / Description</span>
+    <textarea id="task-desc" placeholder="Contexte, action attendue, Ã©lÃ©ments clÃ©sâ¦"></textarea>
+  </div>
+
+  <div class="field">
+    <span class="label">ExÃ©cution</span>
+    <div class="exec-toggle">
+      <button class="exec-btn active-human" id="exec-human" onclick="setExec('Humaine')">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <circle cx="7" cy="4.5" r="2.5"/><path d="M2 12c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
+        </svg>
+        Humaine
+      </button>
+      <button class="exec-btn" id="exec-ai" onclick="setExec('IA')">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <rect
+x="2" y="4" width="10" height="7" rx="2"/>
+          <path d="M5 4V3a2 2 0 014 0v1"/>
+          <circle cx="5.5" cy="7.5" r=".75" fill="currentColor" stroke="none"/>
+          <circle cx="8.5" cy="7.5" r=".75" fill="currentColor" stroke="none"/>
+        </svg>
+        IA
+      </button>
+    </div>
+  </div>
+
+  <div class="field">
+    <span class="label">PrioritÃ©</span>
+    <div class="prio-row">
+      <button class="prio-btn p1" id="prio-1" onclick="setPrio('Prio 1')">P1</button>
+      <button class="prio-btn p2" id="prio-2" onclick="setPrio('Prio 2')">P2</button>
+      <button class="prio-btn p3" id="prio-3" onclick="setPrio('Prio 3')">P3</button>
+      <button class="prio-btn" id="prio-0" onclick="setPrio(null)" style="flex:0;padding:6px 8px;font-size:11px;">â</button>
+    </div>
+  </div>
+
+  <div class="sep"></div>
+
+  <button class="btn-primary" id="btn-task" onclick="submitTask()">
+    CrÃ©er dans Notion
+  </button>
+
+</div>
+
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<!--  PANEL CONTACT                                      -->
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<div class="panel" id="panel-contact">
+
+  <div class="status" id="contact-status">
+    <span class="status-icon"></span>
+    <span class="status-text"></span>
+  </div>
+
+  <div class="field">
+    <span class="label">Rechercher</span>
+    <div class="search-wrap">
+      <input type="text" id="search-q" placeholder="Nom ou emailâ¦"
+             onkeydown="if(event.key==='Enter') doSearch()">
+      <button class="search-btn" onclick="doSearch()">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <circle cx="6" cy="6" r="4"/><path d="M10 10l2 2"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="results" id="results"></div>
+
+  <div id="add-wrap" style="display:none;">
+    <button class="btn-ghost" id="add-btn" onclick="toggleNewPerson()">
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+        <path d="M6 2v8M2 6h8"/>
+      </svg>
+      Ajouter dans Personnes
+    </button>
+  </div>
+
+  <div class="new-person" id="new-person">
+    <span class="new-person-header">Nouvelle personne</span>
+    <div class="field" style="margin:0">
+      <span class="label">Nom complet *</span>
+      <input type="text" id="np-name" placeholder="PrÃ©nom Nom">
+    </div>
+    <div class="field" style="margin:0">
+      <span class="label">Email *</span>
+      <input type="email" id="np-email" placeholder="email@exemple.com">
+    </div>
+    <div class="field" style="margin:0">
+      <span class="label">SociÃ©tÃ©</span>
+      <input type="text" id="np-company" placeholder="Organisation">
+    </div>
+    <div class="field" style="margin:0">
+      <span class="label">Type</span>
+      <div class="type-select" id="type-select">
+        <span class="type-chip" data-type="Partenaires" onclick="toggleType(this)">Partenaires</span>
+        <span class="type-chip" data-type="Clients" onclick="toggleType(this)">Clients</span>
+        <span class="type-chip" data-type="Investisseur" onclick="toggleType(this)">Investisseur</span>
+        <span class="type-chip" data-type="ONG/Association" onclick="toggleType(this)">ONG/Asso</span>
+        <span class="type-chip" data-type="Expert/AcadÃ©mique" onclick="toggleType(this)">Expert</span>
+        <span class="type-chip" data-type="Corporate" onclick="toggleType(this)">Corporate</span>
+        <span class="type-chip" data-type="Fournisseurs" onclick="toggleType(this)">Fournisseur</span>
+        <span class="type-chip" data-type="Autre" onclick="toggleType(this)">Autre</span>
+      </div>
+    </div>
+    <div class="field" style="margin:0">
+      <span class="label">Notes</span>
+      <input type="text" id="np-notes" placeholder="Source, contexteâ¦">
+    </div>
+    <button class="btn-primary" id="btn-person" onclick="submitPerson()">
+      CrÃ©er dans Personnes
+    </button>
+  </div>
+
+</div>
+
+<script>
+// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+//  CONFIG â remplacer par ton URL GAS /exec
+// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxZztYSIkdSaVLKXd0ku2nI2sqFA9k-zVJumGi7ZqSniQJ06BOrffgMO0p6QyFoK2DrEg/exec';
+
+// ââ State ââââââââââââââââââââââââââââââââââââââââââââââââ
+let CONV        = null;
+let execMode    = 'Humaine';
+let prioVal     = null;
+let selectedType = null;
+let newPersonOpen = false;
+
+// ââ Helpers DOM ââââââââââââââââââââââââââââââââââââââââââ
+const $ = id => document.getElementById(id);
+const getVal = id => $( id) ? $(id).value : '';
+const setVal = (id, v) => { if ($(id)) $(id).value = v; };
+const disable = (id, v) => { if ($(id)) $(id).disabled = v; };
+
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ââ GAS API call âââââââââââââââââââââââââââââââââââââââââ
+async function gasPost(payload) {
+  const resp = await fetch(GAS_URL, {
+    method:  'POST',
+    body:    JSON.stringify(payload),
+    headers: { 'Content-Type': 'text/plain' },  // simple request, no preflight
+  });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  return resp.json();
+}
+
+// ââ Init âââââââââââââââââââââââââââââââââââââââââââââââââ
+window.addEventListener('load', async () => {
+  const params = new URLSearchParams(location.search);
+  const convId = params.get('c');
+
+  if (convId) {
+    try {
+      const data = await gasPost({ action: 'getConv', convId });
+      if (data && !data.error) {
+        CONV = data;
+        setVal('task-name', CONV.subject   || '');
+        setVal('task-url',  CONV.url       || '');
+        setVal('task-desc', CONV.snippet   || '');
+        setVal('search-q',  CONV.fromEmail || CONV.fromName || '');
+      }
+    } catch (e) {
+      // Pas bloquant â on affiche le formulaire vide
+      console.warn('[POF] Conv fetch failed:', e);
+    }
+  }
+
+  $('loading').classList.add('hidden');
+});
+
+// ââ Tabs âââââââââââââââââââââââââââââââââââââââââââââââââ
+function showTab(name) {
+  ['task','contact'].forEach(t => {
+    $('panel-' + t).classList.toggle('active', t === name);
+    $('tab-'   + t).classList.toggle('active', t === name);
+  });
+  if (name === 'contact') {
+    const q = getVal('search-q').trim();
+    if (q && !$('results').children.length) doSearch();
+  }
+}
+
+// ââ Execution toggle ââââââââââââââââââââââââââââââââââââââ
+function setExec(mode) {
+  execMode = mode;
+  const isAI = (mode === 'IA');
+  $('exec-human').className = 'exec-btn' + (isAI ? '' : ' active-human');
+  $('exec-ai').className    = 'exec-btn' + (isAI ? ' active-ai' : '');
+  $('btn-task').className   = 'btn-primary' + (isAI ? ' ai-mode' : '');
+  $('ai-notice').classList.toggle('show', isAI);
+}
+
+// ââ Priority ââââââââââââââââââââââââââââââââââââââââââââââ
+function setPrio(p) {
+  prioVal = p;
+  [1,2,3].forEach(n => $('prio-' + n).classList.toggle('on', p === 'Prio ' + n));
+  $('prio-0').style.fontWeight = p ? '' : '700';
+}
+
+// ââ Type chips ââââââââââââââââââââââââââââââââââââââââââââ
+function toggleType(el) {
+  const t = el.dataset.type;
+  selectedType = (selectedType === t) ? null : t;
+  document.querySelectorAll('.type-chip').forEach(c =>
+    c.classList.toggle('on', c.dataset.type === selectedType)
+  );
+}
+
+// ââ Create task âââââââââââââââââââââââââââââââââââââââââââ
+async function submitTask() {
+  const name = getVal('task-name').trim();
+  if (!name) { showStatus('task','err','Le nom est requis.'); return; }
+
+  showStatus('task','info', spinner() + ' CrÃ©ation en coursâ¦');
+  disable('btn-task', true);
+
+  try {
+    const res = await gasPost({
+      action: 'createTask',
+      task: {
+        name,
+        url:         getVal('task-url').trim(),
+        description: getVal('task-desc').trim(),
+        execution:   execMode,
+        priority:    prioVal,
+      }
+    });
+
+    disable('btn-task', false);
+    if (res.success) {
+      const link = res.pageUrl
+        ? ' <a href="' + esc(res.pageUrl) + '" target="_blank">Ouvrir â</a>'
+        : '';
+      showStatus('task','ok',
+        icon('check') + ' TÃ¢che crÃ©Ã©e' + (execMode==='IA' ? ' en Brouillon' : '') + '.' + link);
+    } else {
+      showStatus('task','err', icon('x') + ' ' + (res.error || 'Erreur inconnue.'));
+    }
+  } catch (e) {
+    disable('btn-task', false);
+    showStatus('task','err', icon('x') + ' ' + e.message);
+  }
+}
+
+// ââ Search contact ââââââââââââââââââââââââââââââââââââââââ
+async function doSearch() {
+  const q = getVal('search-q').trim();
+  if (!q) return;
+
+  showStatus('contact','info', spinner() + ' Rechercheâ¦');
+  $('results').innerHTML = '';
+  $('add-wrap').style.display = 'none';
+  $('new-person').classList.remove('show');
+
+  try {
+    const res = await gasPost({ action: 'searchPeople', query: q });
+    clearStatus('contact');
+    renderResults(res, q);
+  } catch (e) {
+    showStatus('contact','err', icon('x') + ' ' + e.message);
+  }
+}
+
+function renderResults(res, query) {
+  const cont = $('results');
+
+  if (res.error) { showStatus('contact','err', icon('x') + ' ' + res.error); return; }
+
+  if (!res.results || res.results.length === 0) {
+    cont.innerHTML = '<p class="no-results">Aucun rÃ©sultat pour Â« ' + esc(query) + ' Â»</p>';
+    if (CONV) {
+      setVal('np-name',  CONV.fromName  || '');
+      setVal('np-email', CONV.fromEmail || '');
+    } else {
+      if (query.includes('@')) setVal('np-email', query);
+      else setVal('np-name', query);
+    }
+    openNewPerson();
+  } else {
+    cont.innerHTML = res.results.map(p => {
+      const types = (p.types || []).slice(0, 3)
+        .map(t => '<span class="type-badge">' + esc(t) + '</span>').join('');
+      return '<div class="contact-card">'
+        + '<div class="card-head">'
+        +   '<span class="card-name">' + esc(p.name) + '</span>'
+        +   '<a class="card-open" href="' + esc(p.url) + '" target="_blank">ouvrir â</a>'
+        + '</div>'
+        + '<div class="card-meta">' + esc(p.email) + (p.company ? ' Â· ' + esc(p.company) : '') + '</div>'
+        + (types ? '<div class="card-types">' + types + '</div>' : '')
+        + '</div>';
+    }).join('');
+  }
+  $('add-wrap').style.display = 'block';
+}
+
+function toggleNewPerson() {
+  if (newPersonOpen) {
+    $('new-person').classList.remove('show');
+    $('add-btn').innerHTML = svgPlus() + ' Ajouter dans Personnes';
+    newPersonOpen = false;
+  } else {
+    openNewPerson();
+  }
+}
+
+function openNewPerson() {
+  newPersonOpen = true;
+  $('new-person').classList.add('show');
+  if ($('add-btn')) $('add-btn').innerHTML = 'â Annuler';
+  if (CONV && !getVal('np-name'))  setVal('np-name',  CONV.fromName  || '');
+  if (CONV && !getVal('np-email')) setVal('np-email', CONV.fromEmail || '');
+}
+
+// ââ Create person âââââââââââââââââââââââââââââââââââââââââ
+async function submitPerson() {
+  const name  = getVal('np-name').trim();
+  const email = getVal('np-email').trim();
+  if (!name)  { showStatus('contact','err', icon('x') + ' Nom requis.'); return; }
+  if (!email) { showStatus('contact','err', icon('x') + ' Email requis.'); return; }
+
+  showStatus('contact','info', spinner() + ' CrÃ©ation dans Personnesâ¦');
+  disable('btn-person', true);
+
+  try {
+    const res = await gasPost({
+      action: 'createPerson',
+      person: {
+        name,
+        email,
+        company: getVal('np-company').trim(),
+        type:    selectedType,
+        notes:   getVal('np-notes').trim(),
+      }
+    });
+
+    disable('btn-person', false);
+    if (res.success) {
+      const link = res.pageUrl
+        ? ' <a href="' + esc(res.pageUrl) + '" target="_blank">Ouvrir â</a>'
+        : '';
+      showStatus('contact','ok', icon('check') + ' Contact crÃ©Ã©.' + link);
+      $('new-person').classList.remove('show');
+      newPersonOpen = false;
+    } else {
+      showStatus('contact','err', icon('x') + ' ' + (res.error || 'Erreur.'));
+    }
+  } catch (e) {
+    disable('btn-person', false);
+    showStatus('contact','err', icon('x') + ' ' + e.message);
+  }
+}
+
+// ââ Status helpers ââââââââââââââââââââââââââââââââââââââââ
+function showStatus(panel, cls, html) {
+  const el = $(panel + '-status');
+  el.className = 'status show ' + cls;
+  el.innerHTML = '<span class="status-icon"></span><span class="status-text">' + html + '</span>';
+}
+function clearStatus(panel) {
+  const el = $(panel + '-status');
+  el.className = 'status'; el.innerHTML = '';
+}
+
+function spinner() {
+  return '<span class="spinner"></span>';
+}
+function icon(type) {
+  const icons = {
+    check: '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2.5 7L5 9.5 10.5 4"/></svg>',
+    x:     '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3l7 7M10 3l-7 7"/></svg>',
+  };
+  return icons[type] || '';
+}
+function svgPlus() {
+  return '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" width="12" height="12"><path d="M6 2v8M2 6h8"/></svg>';
+}
+</script>
+</body>
+</html>
