@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-/* ââ Variables âââââââââââââââââââââââââââââââââââââââ */
-:root 
+/* ── Variables ─────────────────────────────────────── */
+:root {
   --bg:          #FFFFFF;
   --surface:     #F7F7F5;
   --surface-2:   #F0F0ED;
@@ -18,16 +18,16 @@
   --text:        #191919;
   --text-2:      #6B6B6B;
   --text-3:      #9B9B9B;
-  --blue:        #0066FF;
-  --blue-bg:     #EEF4FF;
-  --blue-hover:  #0052CC;
-  --purple:      #6E43E6;
-  --purple-bg:   #F3F0FF;
-  --purple-hover:#5934C7;
-  --green:       #0B8A4A;
-  --green-bg:    #EEFBF4;
-  --red:         #D92D20;
-  --red-bg:      #FFF2F0;
+  --blue:        #1D1E3A;
+  --blue-bg:     #F0F0F0;
+  --blue-hover:  #435D74;
+  --purple:      #75DBCD;
+  --purple-bg:   #F1FBFA;
+  --purple-hover:#2BA595;
+  --green:       #28A745;
+  --green-bg:    #D4EDDA;
+  --red:         #DC3545;
+  --red-bg:      #F8D7DA;
   --radius:      5px;
   --radius-lg:   8px;
   --font-ui:     'Plus Jakarta Sans', sans-serif;
@@ -46,7 +46,7 @@ html, body {
 }
 body { display: flex; flex-direction: column; overflow: hidden; }
 
-/* ââ Loading overlay ââââââââââââââââââââââââââââââââ */
+/* ── Loading overlay ──────────────────────────────── */
 #loading {
   position: fixed; inset: 0; background: var(--bg);
   display: flex; align-items: center; justify-content: center;
@@ -62,16 +62,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 }
 .loading-text { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
 
-/* ââ Tab bar âââââââââââââââââââââââââââââââââââââââââ */
-.tabs {
-  display: flex; border-bottom: 1px solid var(--border);
-  flex-shrink: r-top-color: var(--blue);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-.loading-text { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
-
-/* ââ Tab bar âââââââââââââââââââââââââââââââââââââââââ */
+/* ── Tab bar ───────────────────────────────────────── */
 .tabs {
   display: flex; border-bottom: 1px solid var(--border);
   flex-shrink: 0; background: var(--bg);
@@ -86,19 +77,19 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   margin-bottom: -1px; letter-spacing: 0.01em;
 }
 .tab:hover { color: var(--text-2); }
-.tab.active { color: var(--text); border-bottom-color: var(--blue); font-weight: 600; }
-.tab.active .tab-icon { color: var(--blue); }
+.tab.active { color: var(--text); border-bottom-color: #1D1E3A; font-weight: 600; }
+.tab.active .tab-icon { color: #1D1E3A; }
 .tab-icon { display: flex; align-items: center; flex-shrink: 0; transition: color var(--transition); }
 .tab-icon svg { width: 14px; height: 14px; }
 
-/* ââ Panels ââââââââââââââââââââââââââââââââââââââââââ */
+/* ── Panels ────────────────────────────────────────── */
 .panel {
   display: none; flex-direction: column; gap: 0;
   flex: 1; overflow-y: auto; padding: 14px 14px 20px;
 }
 .panel.active { display: flex; }
 
-/* ââ Field group âââââââââââââââââââââââââââââââââââââ */
+/* ── Field group ───────────────────────────────────── */
 .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
 .field:last-child { margin-bottom: 0; }
 .label {
@@ -115,13 +106,13 @@ input[type="text"], input[type="email"], input[type="url"], textarea, select {
   -webkit-appearance: none;
 }
 input:focus, textarea:focus, select:focus {
-  border-color: var(--blue); background: var(--bg);
-  box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.12);
+  border-color: #1D1E3A; background: var(--bg);
+  box-shadow: 0 0 0 2px rgba(29, 30, 58, 0.08);
 }
 textarea { resize: vertical; min-height: 72px; line-height: 1.55; }
 input::placeholder, textarea::placeholder { color: var(--text-3); }
 
-/* ââ Execution toggle ââââââââââââââââââââââââââââââââ */
+/* ── Execution toggle ──────────────────────────────── */
 .exec-toggle { display: flex; gap: 5px; }
 .exec-btn {
   flex: 1; display: flex; align-items: center; justify-content: center;
@@ -132,16 +123,16 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 }
 .exec-btn:hover { border-color: var(--border-2); color: var(--text); }
 .exec-btn.active-human {
-  background: var(--blue-bg); border-color: rgba(0,102,255,0.3);
+  background: #EBF0F8; border-color: rgba(29,30,58,0.2);
   color: var(--blue); font-weight: 600;
 }
 .exec-btn.active-ai {
-  background: var(--purple-bg); border-color: rgba(110,67,230,0.3);
+  background: var(--purple-bg); border-color: rgba(117,219,205,0.3);
   color: var(--purple); font-weight: 600;
 }
 .exec-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
 
-/* ââ Priority âââââââââââââââââââââââââââââââââââââââ */
+/* ── Priority ─────────────────────────────────────── */
 .prio-row { display: flex; gap: 5px; }
 .prio-btn {
   flex: 1; text-align: center; padding: 6px 4px;
@@ -151,11 +142,11 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
   transition: all var(--transition); user-select: none;
 }
 .prio-btn:hover { border-color: var(--border-2); color: var(--text-2); }
-.prio-btn.p1.on { background: #FFF5F5; border-color: rgba(217,45,32,0.3); color: var(--red); }
-.prio-btn.p2.on { background: #FFFAEB; border-color: rgba(180,130,0,0.3); color: #B48200; }
-.prio-btn.p3.on { background: var(--surface); border-color: var(--border-2); color: var(--text-2); }
+.prio-btn.p1.on { background: var(--red-bg); border-color: rgba(220,53,69,0.3); color: var(--red); }
+.prio-btn.p2.on { background: #FEF3D9; border-color: rgba(229,161,0,0.3); color: #B48200; }
+.prio-btn.p3.on { background: #EBF0F8; border-color: rgba(29,30,58,0.2); color: var(--blue); }
 
-/* ââ AI notice âââââââââââââââââââââââââââââââââââââââ */
+/* ── AI notice ─────────────────────────────────────── */
 .ai-notice {
   display: none; background: var(--purple-bg);
   border: 1px solid rgba(110,67,230,0.2); border-radius: var(--radius);
@@ -166,24 +157,24 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 .ai-notice-icon svg { width: 12px; height: 12px; }
 .ai-notice-text { font-size: 11px; color: var(--purple); line-height: 1.45; }
 
-/* ââ Separator âââââââââââââââââââââââââââââââââââââââ */
+/* ── Separator ─────────────────────────────────────── */
 .sep { height: 1px; background: var(--border); margin: 12px 0; }
 
-/* ââ Primary button ââââââââââââââââââââââââââââââââââ */
+/* ── Primary button ────────────────────────────────── */
 .btn-primary {
   width: 100%; padding: 9px 14px; font-family: var(--font-ui);
-  font-size: 12.5px; font-weight: 600; color: #fff; background: var(--blue);
+  font-size: 12.5px; font-weight: 600; color: #fff; background: #1D1E3A;
   border: none; border-radius: var(--radius); cursor: pointer;
   transition: background var(--transition), transform var(--transition), opacity var(--transition);
   letter-spacing: 0.01em;
 }
-.btn-primary:hover:not(:disabled) { background: var(--blue-hover); }
+.btn-primary:hover:not(:disabled) { background: #435D74; }
 .btn-primary:active:not(:disabled) { transform: scale(0.99); }
 .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-primary.ai-mode { background: var(--purple); }
 .btn-primary.ai-mode:hover:not(:disabled) { background: var(--purple-hover); }
 
-/* ââ Ghost button ââââââââââââââââââââââââââââââââââââ */
+/* ── Ghost button ──────────────────────────────────── */
 .btn-ghost {
   width: 100%; padding: 7px 10px; font-family: var(--font-ui); font-size: 12px;
   font-weight: 500; color: var(--text-2); background: none;
@@ -191,10 +182,10 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
   transition: all var(--transition); display: flex; align-items: center;
   justify-content: center; gap: 5px;
 }
-.btn-ghost:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
+.btn-ghost:hover { border-color: #1D1E3A; color: #1D1E3A; background: #EBF0F8; }
 .btn-ghost svg { width: 12px; height: 12px; }
 
-/* ââ Status banner âââââââââââââââââââââââââââââââââââ */
+/* ── Status banner ─────────────────────────────────── */
 .status {
   display: none; align-items: flex-start; gap: 7px; padding: 9px 10px;
   border-radius: var(--radius); font-size: 12px; line-height: 1.45; margin-bottom: 10px;
@@ -207,7 +198,7 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 .status-icon svg { width: 13px; height: 13px; }
 .status a { color: inherit; font-weight: 600; }
 
-/* ââ Contact cards âââââââââââââââââââââââââââââââââââ */
+/* ── Contact cards ─────────────────────────────────── */
 .results { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .contact-card {
   border: 1px solid var(--border); border-radius: var(--radius);
@@ -234,7 +225,7 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 }
 .no-results { font-size: 12px; color: var(--text-3); padding: 6px 0; font-style: italic; }
 
-/* ââ New person form âââââââââââââââââââââââââââââââââ */
+/* ── New person form ───────────────────────────────── */
 .new-person {
   display: none; flex-direction: column; gap: 10px; padding: 12px;
   background: var(--surface); border: 1px solid var(--border);
@@ -252,11 +243,11 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
   cursor: pointer; transition: all var(--transition); user-select: none;
 }
 .type-chip.on {
-  background: var(--blue-bg); border-color: rgba(0,102,255,0.3);
-  color: var(--blue); font-weight: 500;
+  background: #EBF0F8; border-color: rgba(29,30,58,0.2);
+  color: #1D1E3A; font-weight: 500;
 }
 
-/* ââ Search row ââââââââââââââââââââââââââââââââââââââ */
+/* ── Search row ────────────────────────────────────── */
 .search-wrap { display: flex; gap: 5px; }
 .search-wrap input { flex: 1; }
 .search-btn {
@@ -265,10 +256,10 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
   border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer; color: var(--text-2); transition: all var(--transition);
 }
-.search-btn:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
+.search-btn:hover { border-color: #1D1E3A; color: #1D1E3A; background: #EBF0F8; }
 .search-btn svg { width: 13px; height: 13px; }
 
-/* ââ Spinner âââââââââââââââââââââââââââââââââââââââââ */
+/* ── Spinner ───────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner {
   display: inline-block; width: 12px; height: 12px;
@@ -279,13 +270,13 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
 </head>
 <body>
 
-<!-- ââ Loading overlay âââââââââââââââââââââââââââââââââ -->
+<!-- ── Loading overlay ───────────────────────────────── -->
 <div id="loading">
   <div class="loading-spinner"></div>
-  <span class="loading-text">Chargementâ¦</span>
+  <span class="loading-text">Chargement…</span>
 </div>
 
-<!-- ââ Tabs ââââââââââââââââââââââââââââââââââââââââââââ -->
+<!-- ── Tabs ──────────────────────────────────────────── -->
 <div class="tabs">
   <button class="tab active" id="tab-task" onclick="showTab('task')">
     <span class="tab-icon">
@@ -293,7 +284,7 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
         <path d="M6 8l2 2 4-4"/><rect x="2" y="2" width="12" height="12" rx="2"/>
       </svg>
     </span>
-    TÃ¢che
+    Tâche
   </button>
   <button class="tab" id="tab-contact" onclick="showTab('contact')">
     <span class="tab-icon">
@@ -305,9 +296,9 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
   </button>
 </div>
 
-<!-- âââââââââââââââââââââââââââââââââââââââââââââââââââ -->
-<!--  PANEL TÃCHE                                        -->
-<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<!-- ═══════════════════════════════════════════════════ -->
+<!--  PANEL TÂCHE                                        -->
+<!-- ════════════════════════════════════════════════════ -->
 <div class="panel active" id="panel-task">
 
   <div class="status" id="task-status">
@@ -323,27 +314,27 @@ input::placeholder, textarea::placeholder { color: var(--text-3); }
       </svg>
     </span>
     <span class="ai-notice-text">
-      La tÃ¢che sera crÃ©Ã©e en <strong>Brouillon</strong> pour validation avant exÃ©cution IA.
+      La tâche sera créée en <strong>Brouillon</strong> pour validation avant exécution IA.
     </span>
   </div>
 
   <div class="field">
-    <span class="label">TÃ¢che</span>
-    <input type="text" id="task-name" placeholder="Nom de la tÃ¢cheâ¦">
+    <span class="label">Tâche</span>
+    <input type="text" id="task-name" placeholder="Nom de la tâche…">
   </div>
 
   <div class="field">
     <span class="label">Lien conversation</span>
-    <input type="url" id="task-url" placeholder="https://mail.missiveapp.com/â¦">
+    <input type="url" id="task-url" placeholder="https://mail.missiveapp.com/…">
   </div>
 
   <div class="field">
     <span class="label">Prompt / Description</span>
-    <textarea id="task-desc" placeholder="Contexte, action attendue, Ã©lÃ©ments clÃ©sâ¦"></textarea>
+    <textarea id="task-desc" placeholder="Contexte, action attendue, éléments clés…"></textarea>
   </div>
 
   <div class="field">
-    <span class="label">ExÃ©cution</span>
+    <span class="label">Exécution</span>
     <div class="exec-toggle">
       <button class="exec-btn active-human" id="exec-human" onclick="setExec('Humaine')">
         <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
@@ -365,26 +356,26 @@ x="2" y="4" width="10" height="7" rx="2"/>
   </div>
 
   <div class="field">
-    <span class="label">PrioritÃ©</span>
+    <span class="label">Priorité</span>
     <div class="prio-row">
       <button class="prio-btn p1" id="prio-1" onclick="setPrio('Prio 1')">P1</button>
       <button class="prio-btn p2" id="prio-2" onclick="setPrio('Prio 2')">P2</button>
       <button class="prio-btn p3" id="prio-3" onclick="setPrio('Prio 3')">P3</button>
-      <button class="prio-btn" id="prio-0" onclick="setPrio(null)" style="flex:0;padding:6px 8px;font-size:11px;">â</button>
+      <button class="prio-btn" id="prio-0" onclick="setPrio(null)" style="flex:0;padding:6px 8px;font-size:11px;">—</button>
     </div>
   </div>
 
   <div class="sep"></div>
 
   <button class="btn-primary" id="btn-task" onclick="submitTask()">
-    CrÃ©er dans Notion
+    Créer dans Notion
   </button>
 
 </div>
 
-<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<!-- ════════════════════════════════════════════════════ -->
 <!--  PANEL CONTACT                                      -->
-<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<!-- ════════════════════════════════════════════════════ -->
 <div class="panel" id="panel-contact">
 
   <div class="status" id="contact-status">
@@ -395,7 +386,7 @@ x="2" y="4" width="10" height="7" rx="2"/>
   <div class="field">
     <span class="label">Rechercher</span>
     <div class="search-wrap">
-      <input type="text" id="search-q" placeholder="Nom ou emailâ¦"
+      <input type="text" id="search-q" placeholder="Nom ou email…"
              onkeydown="if(event.key==='Enter') doSearch()">
       <button class="search-btn" onclick="doSearch()">
         <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
@@ -420,14 +411,14 @@ x="2" y="4" width="10" height="7" rx="2"/>
     <span class="new-person-header">Nouvelle personne</span>
     <div class="field" style="margin:0">
       <span class="label">Nom complet *</span>
-      <input type="text" id="np-name" placeholder="PrÃ©nom Nom">
+      <input type="text" id="np-name" placeholder="Prénom Nom">
     </div>
     <div class="field" style="margin:0">
       <span class="label">Email *</span>
       <input type="email" id="np-email" placeholder="email@exemple.com">
     </div>
     <div class="field" style="margin:0">
-      <span class="label">SociÃ©tÃ©</span>
+      <span class="label">Société</span>
       <input type="text" id="np-company" placeholder="Organisation">
     </div>
     <div class="field" style="margin:0">
@@ -437,7 +428,7 @@ x="2" y="4" width="10" height="7" rx="2"/>
         <span class="type-chip" data-type="Clients" onclick="toggleType(this)">Clients</span>
         <span class="type-chip" data-type="Investisseur" onclick="toggleType(this)">Investisseur</span>
         <span class="type-chip" data-type="ONG/Association" onclick="toggleType(this)">ONG/Asso</span>
-        <span class="type-chip" data-type="Expert/AcadÃ©mique" onclick="toggleType(this)">Expert</span>
+        <span class="type-chip" data-type="Expert/Académique" onclick="toggleType(this)">Expert</span>
         <span class="type-chip" data-type="Corporate" onclick="toggleType(this)">Corporate</span>
         <span class="type-chip" data-type="Fournisseurs" onclick="toggleType(this)">Fournisseur</span>
         <span class="type-chip" data-type="Autre" onclick="toggleType(this)">Autre</span>
@@ -445,29 +436,29 @@ x="2" y="4" width="10" height="7" rx="2"/>
     </div>
     <div class="field" style="margin:0">
       <span class="label">Notes</span>
-      <input type="text" id="np-notes" placeholder="Source, contexteâ¦">
+      <input type="text" id="np-notes" placeholder="Source, contexte…">
     </div>
     <button class="btn-primary" id="btn-person" onclick="submitPerson()">
-      CrÃ©er dans Personnes
+      Créer dans Personnes
     </button>
   </div>
 
 </div>
 
 <script>
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-//  CONFIG â remplacer par ton URL GAS /exec
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════════════════════════
+//  CONFIG — remplacer par ton URL GAS /exec
+// ══════════════════════════════════════════════════════════
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbygoHed1AUb0ugYoLeF5D3DJeQ8tXR41ekm9Fms6VNQeONgn8tgvpVfx-H9mOno87hi/exec';
 
-// ââ State ââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── State ────────────────────────────────────────────────
 let CONV        = null;
 let execMode    = 'Humaine';
 let prioVal     = null;
 let selectedType = null;
 let newPersonOpen = false;
 
-// ââ Helpers DOM ââââââââââââââââââââââââââââââââââââââââââ
+// ── Helpers DOM ──────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const getVal = id => $( id) ? $(id).value : '';
 const setVal = (id, v) => { if ($(id)) $(id).value = v; };
@@ -479,7 +470,7 @@ function esc(s) {
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ââ GAS API call âââââââââââââââââââââââââââââââââââââââââ
+// ── GAS API call ─────────────────────────────────────────
 async function gasPost(payload) {
   const resp = await fetch(GAS_URL, {
     method:  'POST',
@@ -490,7 +481,7 @@ async function gasPost(payload) {
   return resp.json();
 }
 
-// ââ Init âââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Init ─────────────────────────────────────────────────
 window.addEventListener('load', async () => {
   const params = new URLSearchParams(location.search);
   const convId = params.get('c');
@@ -506,7 +497,7 @@ window.addEventListener('load', async () => {
         setVal('search-q',  CONV.fromEmail || CONV.fromName || '');
       }
     } catch (e) {
-      // Pas bloquant â on affiche le formulaire vide
+      // Pas bloquant — on affiche le formulaire vide
       console.warn('[POF] Conv fetch failed:', e);
     }
   }
@@ -514,7 +505,7 @@ window.addEventListener('load', async () => {
   $('loading').classList.add('hidden');
 });
 
-// ââ Tabs âââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Tabs ─────────────────────────────────────────────────
 function showTab(name) {
   ['task','contact'].forEach(t => {
     $('panel-' + t).classList.toggle('active', t === name);
@@ -526,7 +517,7 @@ function showTab(name) {
   }
 }
 
-// ââ Execution toggle ââââââââââââââââââââââââââââââââââââââ
+// ── Execution toggle ──────────────────────────────────────
 function setExec(mode) {
   execMode = mode;
   const isAI = (mode === 'IA');
@@ -536,14 +527,14 @@ function setExec(mode) {
   $('ai-notice').classList.toggle('show', isAI);
 }
 
-// ââ Priority ââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Priority ──────────────────────────────────────────────
 function setPrio(p) {
   prioVal = p;
   [1,2,3].forEach(n => $('prio-' + n).classList.toggle('on', p === 'Prio ' + n));
   $('prio-0').style.fontWeight = p ? '' : '700';
 }
 
-// ââ Type chips ââââââââââââââââââââââââââââââââââââââââââââ
+// ── Type chips ────────────────────────────────────────────
 function toggleType(el) {
   const t = el.dataset.type;
   selectedType = (selectedType === t) ? null : t;
@@ -552,12 +543,12 @@ function toggleType(el) {
   );
 }
 
-// ââ Create task âââââââââââââââââââââââââââââââââââââââââââ
+// ── Create task ───────────────────────────────────────────
 async function submitTask() {
   const name = getVal('task-name').trim();
   if (!name) { showStatus('task','err','Le nom est requis.'); return; }
 
-  showStatus('task','info', spinner() + ' CrÃ©ation en coursâ¦');
+  showStatus('task','info', spinner() + ' Création en cours…');
   disable('btn-task', true);
 
   try {
@@ -575,10 +566,10 @@ async function submitTask() {
     disable('btn-task', false);
     if (res.success) {
       const link = res.pageUrl
-        ? ' <a href="' + esc(res.pageUrl) + '" target="_blank">Ouvrir â</a>'
+        ? ' <a href="' + esc(res.pageUrl) + '" target="_blank">Ouvrir →</a>'
         : '';
       showStatus('task','ok',
-        icon('check') + ' TÃ¢che crÃ©Ã©e' + (execMode==='IA' ? ' en Brouillon' : '') + '.' + link);
+        icon('check') + ' Tâche créée' + (execMode==='IA' ? ' en Brouillon' : '') + '.' + link);
     } else {
       showStatus('task','err', icon('x') + ' ' + (res.error || 'Erreur inconnue.'));
     }
@@ -588,12 +579,12 @@ async function submitTask() {
   }
 }
 
-// ââ Search contact ââââââââââââââââââââââââââââââââââââââââ
+// ── Search contact ────────────────────────────────────────
 async function doSearch() {
   const q = getVal('search-q').trim();
   if (!q) return;
 
-  showStatus('contact','info', spinner() + ' Rechercheâ¦');
+  showStatus('contact','info', spinner() + ' Recherche…');
   $('results').innerHTML = '';
   $('add-wrap').style.display = 'none';
   $('new-person').classList.remove('show');
@@ -603,17 +594,34 @@ async function doSearch() {
     clearStatus('contact');
     renderResults(res, q);
   } catch (e) {
-    showStatus('contact','err', icon('x') + ' ' + e.message);
+    // On erreur (Failed to fetch, timeout, etc.), dérouler le formulaire de création
+    $('results').innerHTML = '<p class="no-results">Erreur de recherche. Créer un nouveau contact.</p>';
+    $('add-wrap').style.display = 'none';
+    // Pré-remplir avec la query
+    if (q.includes('@')) setVal('np-email', q);
+    else setVal('np-name', q);
+    if (CONV && !getVal('np-email')) setVal('np-email', CONV.fromEmail || '');
+    openNewPerson();
+    showStatus('contact','err', icon('x') + ' Impossible de rechercher. Vous pouvez créer le contact directement.');
   }
 }
 
 function renderResults(res, query) {
   const cont = $('results');
 
-  if (res.error) { showStatus('contact','err', icon('x') + ' ' + res.error); return; }
+  if (res.error) {
+    showStatus('contact','err', icon('x') + ' ' + res.error);
+    // Ouvrir le formulaire en cas d'erreur API (folk/notion down)
+    cont.innerHTML = '<p class="no-results">Erreur lors de la recherche.</p>';
+    if (query.includes('@')) setVal('np-email', query);
+    else setVal('np-name', query);
+    if (CONV && !getVal('np-email')) setVal('np-email', CONV.fromEmail || '');
+    openNewPerson();
+    return;
+  }
 
   if (!res.results || res.results.length === 0) {
-    cont.innerHTML = '<p class="no-results">Aucun rÃ©sultat pour Â« ' + esc(query) + ' Â»</p>';
+    cont.innerHTML = '<p class="no-results">Aucun résultat pour « ' + esc(query) + ' »</p>';
     if (CONV) {
       setVal('np-name',  CONV.fromName  || '');
       setVal('np-email', CONV.fromEmail || '');
@@ -622,6 +630,7 @@ function renderResults(res, query) {
       else setVal('np-name', query);
     }
     openNewPerson();
+    $('add-wrap').style.display = 'none';
   } else {
     cont.innerHTML = res.results.map(p => {
       const types = (p.types || []).slice(0, 3)
@@ -629,14 +638,14 @@ function renderResults(res, query) {
       return '<div class="contact-card">'
         + '<div class="card-head">'
         +   '<span class="card-name">' + esc(p.name) + '</span>'
-        +   '<a class="card-open" href="' + esc(p.url) + '" target="_blank">ouvrir â</a>'
+        +   '<a class="card-open" href="' + esc(p.url) + '" target="_blank">ouvrir →</a>'
         + '</div>'
-        + '<div class="card-meta">' + esc(p.email) + (p.company ? ' Â· ' + esc(p.company) : '') + '</div>'
+        + '<div class="card-meta">' + esc(p.email) + (p.company ? ' · ' + esc(p.company) : '') + '</div>'
         + (types ? '<div class="card-types">' + types + '</div>' : '')
         + '</div>';
     }).join('');
+    $('add-wrap').style.display = 'block';
   }
-  $('add-wrap').style.display = 'block';
 }
 
 function toggleNewPerson() {
@@ -652,19 +661,19 @@ function toggleNewPerson() {
 function openNewPerson() {
   newPersonOpen = true;
   $('new-person').classList.add('show');
-  if ($('add-btn')) $('add-btn').innerHTML = 'â Annuler';
+  if ($('add-btn')) $('add-btn').innerHTML = '✕ Annuler';
   if (CONV && !getVal('np-name'))  setVal('np-name',  CONV.fromName  || '');
   if (CONV && !getVal('np-email')) setVal('np-email', CONV.fromEmail || '');
 }
 
-// ââ Create person âââââââââââââââââââââââââââââââââââââââââ
+// ── Create person ─────────────────────────────────────────
 async function submitPerson() {
   const name  = getVal('np-name').trim();
   const email = getVal('np-email').trim();
   if (!name)  { showStatus('contact','err', icon('x') + ' Nom requis.'); return; }
   if (!email) { showStatus('contact','err', icon('x') + ' Email requis.'); return; }
 
-  showStatus('contact','info', spinner() + ' CrÃ©ation dans Personnesâ¦');
+  showStatus('contact','info', spinner() + ' Création dans Personnes…');
   disable('btn-person', true);
 
   try {
@@ -682,9 +691,9 @@ async function submitPerson() {
     disable('btn-person', false);
     if (res.success) {
       const link = res.pageUrl
-        ? ' <a href="' + esc(res.pageUrl) + '" target="_blank">Ouvrir â</a>'
+        ? ' <a href="' + esc(res.pageUrl) + '" target="_blank">Ouvrir →</a>'
         : '';
-      showStatus('contact','ok', icon('check') + ' Contact crÃ©Ã©.' + link);
+      showStatus('contact','ok', icon('check') + ' Contact créé.' + link);
       $('new-person').classList.remove('show');
       newPersonOpen = false;
     } else {
@@ -696,7 +705,7 @@ async function submitPerson() {
   }
 }
 
-// ââ Status helpers ââââââââââââââââââââââââââââââââââââââââ
+// ── Status helpers ────────────────────────────────────────
 function showStatus(panel, cls, html) {
   const el = $(panel + '-status');
   el.className = 'status show ' + cls;
