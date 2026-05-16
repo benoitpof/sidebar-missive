@@ -1,270 +1,314 @@
-// ============================================================
-//  POF Missive Sidebar â Code.gs  v3
-//  Backend GAS : API JSON pour sidebar GitHub Pages
-//
-//  SETUP â Script Properties (Project Settings > Script Properties) :
-//    MISSIVE_API_KEY   â Missive Settings > API > Create API key
-//    NOTION_API_KEY    â Notion Settings > Integrations > Internal token
-//    NOTION_TASKS_DB   â 332c2ce245e8807ea247f8a7c403c53d
-//    NOTION_PEOPLE_DB  â 25ac2ce245e880bbb104e3c534ec704b
-//
-//  DÃPLOIEMENT :
-//    Deploy > New deployment > Type: Web App
-//    Execute as: Me | Who has access: Anyone
-// ============================================================
-
-// âââ CONFIG ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-
-const CFG = {
-  missiveKey: () => PropertiesService.getScriptProperties().getProperty('MISSIVE_API_KEY'),
-  notionKey:  () => PropertiesService.getScriptProperties().getProperty('NOTION_API_KEY'),
-  tasksDb:    () => PropertiesService.getScriptProperties().getProperty('NOTION_TASKS_DB')  || '332c2ce245e8807ea247f8a7c403c53d',
-  peopleDb:   () => PropertiesService.getScriptProperties().getProperty('NOTION_PEOPLE_DB') || '25ac2ce245e880bbb104e3c534ec704b',
-};
-
-// SchÃ©ma rÃ©el des bases Notion (vÃ©rifiÃ© le 2026-04-11)
-const SCHEMA = {
-  tasks: {
-    title:      'Nom de la tÃ¢che',
-    prompt:     'Prompt',
-    execution:  'Execution',
-    typeAction: "Type d'action",
-    section:    'Section',
-    etat:       'Etat',
-    source:     'Source',
-    priorite:   'PrioritÃ©',
-  },
-  people: {
-    title:   'Nom prÃ©nom',
-    email:   'E-mail',
-    company: 'SociÃ©tÃ©',
-    type:    'Type',
-    desc:    'Description',
-  },
-};
-
-// âââ ENTRY POINTS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-
 /**
- * doGet : sanity check / accÃ¨s direct navigateur.
- * La sidebar est maintenant servie par GitHub Pages.
+ * missive-sidebar-proxy
+ *
+ * Proxy GAS pour la sidebar Missive Notion (HTML statique déployé sur GitHub Pages
+ * ou équivalent). Masque la clé Anthropic, suit le pattern Secrets_Proxy POF.
+ *
+ * Le frontend appelle ce GAS en POST avec {action, token, ...args}.
+ * Le GAS valide le PUBLIC_TOKEN, récupère ANTROPIC_API_TOKEN via getSecret_,
+ * appelle l'API Anthropic avec MCP Notion/Folk, et retourne le JSON parsé.
+ *
+ * Actions exposées :
+ *   ping
+ *   lookup_person                {email, name}
+ *   create_person                {email, name}
+ *   update_person_instructions   {page_id, text}
+ *   lookup_conv                  {missive_conversation_id}
+ *   upsert_conv                  {missive_conversation_id, text, page_id?}
+ *   lookup_folk                  {email, name}
  */
-function doGet(e) {
-  Logger.log('[doGet] params=' + JSON.stringify(e && e.parameter));
-  return HtmlService.createHtmlOutput(
-    '<html><body style="font-family:sans-serif;padding:20px">'
-    + '<h3 style="color:#0066FF">POF GAS API v3</h3>'
-    + '<p>Backend opÃ©rationnel. La sidebar est sur GitHub Pages.</p>'
-    + '</body></html>'
-  ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+
+/* ─── Script Properties attendues (toutes non-secrets) ─────────────
+   Injectées par gas-deploy :  SECRETS_PROXY_URL, SECRETS_PROXY_TOKEN
+   À configurer manuellement après premier déploiement :
+     PUBLIC_TOKEN                 (random, partagé avec le frontend)
+     NOTION_PERSONS_DB            (UUID base Notion Personnes)
+     NOTION_CONVS_DB              (UUID base Notion Instructions Conversations)
+     PERSON_EMAIL_PROP            (défaut: "Email")
+     PERSON_INSTRUCTIONS_PROP     (défaut: "Instructions spécifiques")
+     CONV_MISSIVE_ID_PROP         (défaut: "Missive ID")
+     CONV_INSTRUCTIONS_PROP       (défaut: "Instructions")
+   ──────────────────────────────────────────────────────────────── */
+
+const MODEL = 'claude-sonnet-4-6';
+const MAX_TOKENS = 800;
+const MCP_NOTION = 'https://mcp.notion.com/mcp';
+const MCP_FOLK   = 'https://mcp.zapier.com/api/mcp/a/13565407/mcp';
+
+/* ═══════════════════════════════════════════════════════════════
+   ENTRY POINTS
+   ═══════════════════════════════════════════════════════════════ */
+
+function doPost(e) {
+  try {
+    const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    const auth = checkAuth_(body.token);
+    if (!auth.ok) return json_({ error: auth.error });
+
+    const action = body.action;
+    let result;
+    switch (action) {
+      case 'ping':                       result = { ok: true, version: '1.0' };       break;
+      case 'lookup_person':              result = handleLookupPerson_(body);          break;
+      case 'create_person':              result = handleCreatePerson_(body);          break;
+      case 'update_person_instructions': result = handleUpdatePersonInstr_(body);     break;
+      case 'lookup_conv':                result = handleLookupConv_(body);            break;
+      case 'upsert_conv':                result = handleUpsertConv_(body);            break;
+      case 'lookup_folk':                result = handleLookupFolk_(body);            break;
+      default:                           return json_({ error: 'unknown action: ' + action });
+    }
+    return json_(result);
+  } catch (err) {
+    return json_({ error: String((err && err.message) || err) });
+  }
 }
 
-/**
- * doPost : point d'entrÃ©e unique pour toutes les actions.
- * Body attendu (JSON, Content-Type: text/plain) :
- *   { action: 'getConv'|'createTask'|'searchPeople'|'createPerson', ...payload }
- */
-function doPost(e) {
-  Logger.log('[doPost] raw=' + (e.postData ? e.postData.contents.substring(0, 200) : 'null'));
+function doGet(_e) {
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.0' });
+}
 
-  let result;
-  try {
-    const body = JSON.parse(e.postData.contents);
-    Logger.log('[doPost] action=' + body.action);
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════ */
 
-    switch (body.action) {
+function checkAuth_(token) {
+  const expected = cfg_('PUBLIC_TOKEN');
+  if (!expected) return { ok: false, error: 'PUBLIC_TOKEN not configured' };
+  if (!token || token !== expected) return { ok: false, error: 'invalid token' };
+  return { ok: true };
+}
 
-      case 'getConv':
-        const conv = _fetchMissiveConversation(body.convId);
-        result = conv || { error: 'Conversation introuvable' };
-        break;
-
-      case 'searchPeople':
-        result = _searchPersonnes((body.query || '').trim());
-        break;
-
-      case 'createTask':
-        result = _createNotionTask(body.task);
-        break;
-
-      case 'createPerson':
-        result = _createNotionPerson(body.person);
-        break;
-
-      default:
-        result = { error: 'Action inconnue : ' + body.action };
-    }
-
-  } catch (err) {
-    Logger.log('[doPost] ERR: ' + err);
-    result = { error: err.toString() };
-  }
-
-  return ContentService
-    .createTextOutput(JSON.stringify(result))
+function json_(obj) {
+  // GAS Web App n'autorise pas la définition du status code via ContentService.
+  // Les erreurs voyagent dans le payload {error: "..."}.
+  return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// âââ MISSIVE API âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function cfg_(key) {
+  return PropertiesService.getScriptProperties().getProperty(key);
+}
 
-function _fetchMissiveConversation(convId) {
-  if (!convId) return null;
-  Logger.log('[_fetchMissiveConversation] id=' + convId);
+/* ═══════════════════════════════════════════════════════════════
+   ACTION HANDLERS
+   ═══════════════════════════════════════════════════════════════ */
 
-  const resp = UrlFetchApp.fetch(
-    'https://public.missiveapp.com/v1/conversations/' + convId,
-    {
-      method: 'GET',
-      headers: {
-        'Authorization': 'Bearer ' + CFG.missiveKey(),
-        'Content-Type':  'application/json',
-      },
-      muteHttpExceptions: true,
-    }
+function handleLookupPerson_(body) {
+  const email = String(body.email || '');
+  const name  = String(body.name  || '');
+  const dbId  = cfg_('NOTION_PERSONS_DB');
+  const instrProp = cfg_('PERSON_INSTRUCTIONS_PROP') || 'Instructions spécifiques';
+
+  if (!dbId) throw new Error('NOTION_PERSONS_DB not configured');
+
+  const prompt =
+    'Cherche dans la base Notion "' + dbId + '" une personne avec:\n' +
+    '- email: ' + JSON.stringify(email) + '\n' +
+    '- ou nom: ' + JSON.stringify(name) + '\n\n' +
+    'Utilise notion_query_database ou notion_search.\n\n' +
+    'Retourne EXACTEMENT ce JSON, sans markdown:\n' +
+    '{"found": boolean, "notion_page_id": string|null, "notion_page_url": string|null, ' +
+    '"name": string|null, "email": string|null, ' +
+    '"person_instructions": "valeur du champ \\"' + instrProp + '\\" ou null"}';
+
+  return callClaude_(
+    'Tu es un assistant de recherche Notion. Réponds UNIQUEMENT en JSON valide, sans markdown ni explication.',
+    prompt,
+    [MCP_NOTION]
   );
-
-  const code = resp.getResponseCode();
-  Logger.log('[_fetchMissiveConversation] HTTP ' + code);
-  if (code !== 200) return null;
-
-  const data = JSON.parse(resp.getContentText());
-  const conv = data.conversations;
-  if (!conv) return null;
-
-  const from    = conv.from_field || {};
-  const snippet = (conv.messages && conv.messages[0]) ? (conv.messages[0].preview || '') : '';
-  const convUrl = 'https://mail.missiveapp.com/#conversations/' + convId;
-
-  return {
-    id:        convId,
-    subject:   conv.subject || conv.latest_message_subject || '',
-    fromName:  from.name    || '',
-    fromEmail: from.address || '',
-    url:       convUrl,
-    snippet:   snippet,
-  };
 }
 
-// âââ NOTION HELPERS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function handleCreatePerson_(body) {
+  const email = String(body.email || '');
+  const name  = String(body.name  || '');
+  const dbId  = cfg_('NOTION_PERSONS_DB');
+  const emailProp = cfg_('PERSON_EMAIL_PROP') || 'Email';
 
-function _notionReq(path, method, body) {
-  const opts = {
-    method:  method || 'GET',
+  if (!dbId) throw new Error('NOTION_PERSONS_DB not configured');
+
+  const prompt =
+    'Crée une page dans la base Notion "' + dbId + '" avec:\n' +
+    '- Titre (Name): ' + JSON.stringify(name) + '\n' +
+    '- Propriété "' + emailProp + '": ' + JSON.stringify(email) + '\n\n' +
+    'Retourne, sans markdown: {"success": boolean, "notion_page_id": string, "notion_page_url": string}';
+
+  return callClaude_(
+    'Tu es un assistant Notion. Réponds UNIQUEMENT en JSON valide.',
+    prompt,
+    [MCP_NOTION]
+  );
+}
+
+function handleUpdatePersonInstr_(body) {
+  const pageId = String(body.page_id || '');
+  const text   = String(body.text    || '');
+  const prop   = cfg_('PERSON_INSTRUCTIONS_PROP') || 'Instructions spécifiques';
+
+  if (!pageId) throw new Error('page_id required');
+
+  const prompt =
+    'Mets à jour la page Notion avec ID "' + pageId + '".\n' +
+    'Définis la propriété rich text "' + prop + '" avec le contenu suivant :\n' +
+    JSON.stringify(text) + '\n\n' +
+    'Retourne, sans markdown: {"success": boolean}';
+
+  return callClaude_(
+    'Tu es un assistant Notion. Réponds UNIQUEMENT en JSON valide.',
+    prompt,
+    [MCP_NOTION]
+  );
+}
+
+function handleLookupConv_(body) {
+  const convId = String(body.missive_conversation_id || '');
+  const dbId   = cfg_('NOTION_CONVS_DB');
+  const idProp = cfg_('CONV_MISSIVE_ID_PROP') || 'Missive ID';
+  const instrProp = cfg_('CONV_INSTRUCTIONS_PROP') || 'Instructions';
+
+  if (!dbId)   throw new Error('NOTION_CONVS_DB not configured');
+  if (!convId) throw new Error('missive_conversation_id required');
+
+  const prompt =
+    'Cherche dans la base Notion "' + dbId + '" une page où la propriété "' + idProp +
+    '" vaut exactement ' + JSON.stringify(convId) + '.\n\n' +
+    'Retourne, sans markdown: ' +
+    '{"found": boolean, "notion_page_id": string|null, "instructions": "valeur de \\"' +
+    instrProp + '\\" ou null"}';
+
+  return callClaude_(
+    'Tu es un assistant Notion. Réponds UNIQUEMENT en JSON valide.',
+    prompt,
+    [MCP_NOTION]
+  );
+}
+
+function handleUpsertConv_(body) {
+  const convId = String(body.missive_conversation_id || '');
+  const text   = String(body.text || '');
+  const dbId   = cfg_('NOTION_CONVS_DB');
+  const idProp = cfg_('CONV_MISSIVE_ID_PROP') || 'Missive ID';
+  const instrProp = cfg_('CONV_INSTRUCTIONS_PROP') || 'Instructions';
+
+  if (!dbId)   throw new Error('NOTION_CONVS_DB not configured');
+  if (!convId) throw new Error('missive_conversation_id required');
+
+  if (body.page_id) {
+    // Mise à jour directe si on a déjà la page_id
+    const prompt =
+      'Mets à jour la page Notion "' + String(body.page_id) + '".\n' +
+      'Définis la propriété rich text "' + instrProp + '" avec :\n' +
+      JSON.stringify(text) + '\n\n' +
+      'Retourne, sans markdown: {"success": boolean, "notion_page_id": "' + String(body.page_id) + '"}';
+    return callClaude_(
+      'Tu es un assistant Notion. Réponds UNIQUEMENT en JSON valide.',
+      prompt,
+      [MCP_NOTION]
+    );
+  }
+
+  // Upsert : cherche d'abord, met à jour si trouvé, crée sinon
+  const prompt =
+    'Cherche dans la base Notion "' + dbId + '" une page où la propriété "' + idProp +
+    '" vaut ' + JSON.stringify(convId) + '.\n' +
+    'Si elle existe : mets à jour sa propriété rich text "' + instrProp + '" avec :\n' +
+    JSON.stringify(text) + '\n' +
+    'Sinon : crée une nouvelle page avec "' + idProp + '" = ' + JSON.stringify(convId) +
+    ' et "' + instrProp + '" = ' + JSON.stringify(text) + '\n\n' +
+    'Retourne, sans markdown: {"success": boolean, "notion_page_id": string, "created": boolean}';
+
+  return callClaude_(
+    'Tu es un assistant Notion. Réponds UNIQUEMENT en JSON valide.',
+    prompt,
+    [MCP_NOTION]
+  );
+}
+
+function handleLookupFolk_(body) {
+  const email = String(body.email || '');
+  const name  = String(body.name  || '');
+
+  const prompt =
+    'Cherche dans Folk un contact avec email ' + JSON.stringify(email) +
+    ' ou nom ' + JSON.stringify(name) + '.\n\n' +
+    'Retourne, sans markdown: ' +
+    '{"found": boolean, "folk_id": string|null, "notion_page_id": string|null, ' +
+    '"name": string|null, "email": string|null}';
+
+  return callClaude_(
+    'Tu es un assistant CRM Folk. Réponds UNIQUEMENT en JSON valide.',
+    prompt,
+    [MCP_FOLK]
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ANTHROPIC API CALL
+   ═══════════════════════════════════════════════════════════════ */
+
+function callClaude_(system, userPrompt, mcpServers) {
+  const apiKey = getSecret_('ANTROPIC_API_TOKEN'); // typo intentionnelle Doppler
+
+  const payload = {
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    system: system,
+    messages: [{ role: 'user', content: userPrompt }]
+  };
+  if (mcpServers && mcpServers.length) {
+    payload.mcp_servers = mcpServers.map(function (u) {
+      return { type: 'url', url: u, name: u.split('/')[2] };
+    });
+  }
+
+  const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post',
+    contentType: 'application/json',
     headers: {
-      'Authorization':  'Bearer ' + CFG.notionKey(),
-      'Notion-Version': '2022-06-28',
-      'Content-Type':   'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'mcp-client-2025-04-04'
     },
-    muteHttpExceptions: true,
-  };
-  if (body) opts.payload = JSON.stringify(body);
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
 
-  const resp = UrlFetchApp.fetch('https://api.notion.com/v1' + path, opts);
-  const code = resp.getResponseCode();
-  const data = JSON.parse(resp.getContentText());
-
-  if (code >= 400) {
-    throw new Error('Notion ' + code + ': ' + (data.message || JSON.stringify(data)));
+  const code = res.getResponseCode();
+  if (code !== 200) {
+    throw new Error('Anthropic API ' + code + ': ' + res.getContentText().slice(0, 500));
   }
-  return data;
+
+  const data = JSON.parse(res.getContentText());
+  const textBlock = (data.content || []).filter(function (b) { return b.type === 'text'; })[0];
+  const text = textBlock ? textBlock.text : '';
+  return parseJsonLoose_(text);
 }
 
-// âââ PERSONNES âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-
-function _searchPersonnes(query) {
-  Logger.log('[_searchPersonnes] q=' + query);
-  const S  = SCHEMA.people;
-  const db = CFG.peopleDb();
-
-  const filter = {
-    or: [
-      { property: S.title, title: { contains: query } },
-      { property: S.email, email: { equals:   query } },
-    ],
-  };
-  if (query.includes('@')) {
-    filter.or.push({ property: S.email, email: { contains: query } });
-  }
-
-  const data = _notionReq('/databases/' + db + '/query', 'POST', {
-    filter,
-    page_size: 7,
-    sorts: [{ property: S.title, direction: 'ascending' }],
-  });
-
-  const results = (data.results || []).map(p => {
-    const props = p.properties;
-    const title = props[S.title] && props[S.title].title && props[S.title].title[0]
-      ? props[S.title].title[0].plain_text : '';
-    const email = props[S.email] && props[S.email].email ? props[S.email].email : '';
-    const soc   = props[S.company] && props[S.company].rich_text && props[S.company].rich_text[0]
-      ? props[S.company].rich_text[0].plain_text : '';
-    const types = props[S.type] && props[S.type].multi_select
-      ? props[S.type].multi_select.map(t => t.name) : [];
-
-    return { id: p.id, url: p.url, name: title, email, company: soc, types };
-  });
-
-  return { results };
+function parseJsonLoose_(s) {
+  if (!s) return null;
+  const clean = s.replace(/```json\n?|```\n?/g, '').trim();
+  try { return JSON.parse(clean); }
+  catch (_e) { return { error: 'invalid json from model', raw: clean.slice(0, 300) }; }
 }
 
-function _createNotionPerson(person) {
-  Logger.log('[_createNotionPerson] name=' + (person && person.name));
-  const S  = SCHEMA.people;
-  const db = CFG.peopleDb();
-
-  const properties = {};
-  properties[S.title] = { title: [{ text: { content: person.name || '' } }] };
-  if (person.email)   properties[S.email]   = { email: person.email };
-  if (person.company) properties[S.company] = { rich_text: [{ text: { content: person.company } }] };
-  if (person.type)    properties[S.type]    = { multi_select: [{ name: person.type }] };
-  if (person.notes)   properties[S.desc]    = { rich_text: [{ text: { content: person.notes } }] };
-
-  const page = _notionReq('/pages', 'POST', {
-    parent:     { database_id: db },
-    properties: properties,
-  });
-
-  Logger.log('[_createNotionPerson] created=' + page.id);
-  return { success: true, pageId: page.id, pageUrl: page.url };
-}
-
-// âââ TASKS BACKLOG ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-
-function _createNotionTask(task) {
-  Logger.log('[_createNotionTask] name=' + (task && task.name) + ' exec=' + (task && task.execution));
-  const S  = SCHEMA.tasks;
-  const db = CFG.tasksDb();
-
-  // Prompt : lien Missive + description
-  const promptParts = [];
-  if (task.url)         promptParts.push('ð ' + task.url);
-  if (task.description) promptParts.push(task.description);
-  const promptText = promptParts.join('\n\n');
-
-  // Execution : "Autonome" = IA, "Normale" = Humaine
-  const execution  = (task.execution === 'IA') ? 'Autonome' : 'Normale';
-  const etatValue  = (execution === 'Autonome') ? 'Brouillon' : 'A faire';
-
-  const properties = {};
-  properties[S.title]      = { title: [{ text: { content: task.name || '' } }] };
-  if (promptText) {
-    properties[S.prompt]   = { rich_text: [{ text: { content: promptText } }] };
+/* ═══════════════════════════════════════════════════════════════
+   getSecret_ — pattern Secrets_Proxy POF
+   Injecté automatiquement par gas-deploy. Ne pas modifier.
+   ═══════════════════════════════════════════════════════════════ */
+function getSecret_(name) {
+  var props = PropertiesService.getScriptProperties();
+  var proxyUrl = props.getProperty('SECRETS_PROXY_URL');
+  var proxyToken = props.getProperty('SECRETS_PROXY_TOKEN');
+  if (!proxyUrl || !proxyToken) {
+    throw new Error('SECRETS_PROXY_URL ou SECRETS_PROXY_TOKEN manquant dans Script Properties');
   }
-  properties[S.execution]  = { select: { name: execution } };
-  properties[S.typeAction] = { select: { name: 'Mail' } };
-  properties[S.section]    = { select: { name: 'Inbox' } };
-  properties[S.source]     = { select: { name: 'Missive' } };
-  properties[S.etat]       = { status: { name: etatValue } };
-  if (task.priority) {
-    properties[S.priorite] = { select: { name: task.priority } };
+  var url = proxyUrl + '?action=getSecret&name=' + encodeURIComponent(name) +
+            '&token=' + encodeURIComponent(proxyToken);
+  var response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  if (response.getResponseCode() !== 200) {
+    throw new Error('Secrets_Proxy erreur ' + response.getResponseCode() + ' pour ' + name);
   }
-
-  const page = _notionReq('/pages', 'POST', {
-    parent:     { database_id: db },
-    properties: properties,
-  });
-
-  Logger.log('[_createNotionTask] created=' + page.id + ' etat=' + etatValue);
-  return { success: true, pageId: page.id, pageUrl: page.url };
+  var parsed = JSON.parse(response.getContentText());
+  if (parsed.error) throw new Error('Secret non trouve ou erreur proxy : ' + parsed.error);
+  if (!parsed.value) throw new Error('Secret vide : ' + name);
+  return parsed.value;
 }
