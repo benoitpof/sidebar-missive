@@ -251,6 +251,22 @@ button { font-family: inherit; }
   color: var(--text-muted);
 }
 
+/* Badge as a clickable link (e.g. "Notion ↗") */
+a.badge {
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+a.badge:hover { filter: brightness(0.96); }
+.badge-arrow {
+  width: 11px; height: 11px;
+  margin-left: 1px;
+  margin-right: -2px;
+  opacity: 0.7;
+  transition: transform .15s, opacity .15s;
+}
+a.badge:hover .badge-arrow { transform: translate(1px, -1px); opacity: 1; }
+
 /* ── BUTTONS ───────────────────────────────────────────── */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
@@ -467,3 +483,363 @@ textarea::placeholder { color: var(--text-xmuted); }
 
 /* ── INLINE NOTION/FOLK LOGO ───────────────────────────── */
 .logo-inline { width: 12px; height: 12px; flex-shrink: 0; }
+
+/* ── QUICK ACTIONS (Task pane) ─────────────────────────── */
+.quick-actions { display: flex; flex-direction: column; gap: 4px; }
+
+.action-row-btn {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 9px 10px 9px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  font-family: "Poppins", sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, box-shadow .12s;
+  line-height: 1.3;
+}
+.action-row-btn:hover {
+  background: var(--bg-soft);
+  border-color: var(--pof-gray-400);
+}
+.action-row-btn:active { transform: translateY(0.5px); }
+
+.action-icon {
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--pof-teal-dark);
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: #E6F4F2;
+}
+.action-icon svg { width: 14px; height: 14px; stroke-width: 1.8; }
+
+.action-label { flex: 1; min-width: 0; }
+.action-arrow {
+  color: var(--text-xmuted);
+  flex-shrink: 0;
+  transition: transform .15s;
+  display: inline-flex;
+}
+.action-arrow svg { width: 14px; height: 14px; stroke-width: 1.8; }
+.action-row-btn.open .action-arrow { transform: rotate(90deg); color: var(--text); }
+
+/* Inline expansion panel anchored to the action above */
+.action-panel {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--r-md) var(--r-md);
+  padding: 12px;
+  margin-top: -7px;
+  margin-bottom: 4px;
+  position: relative;
+  animation: slideDown .18s ease;
+}
+.action-panel .panel-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.action-row-btn.open {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: transparent;
+  background: var(--bg-soft);
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── CHIPS (selectable categories) ─────────────────────── */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  font-family: "Poppins", sans-serif;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  transition: all .12s;
+  white-space: nowrap;
+}
+.chip:hover {
+  border-color: var(--pof-teal-dark);
+  color: var(--pof-teal-deep);
+  background: #F1F8F7;
+}
+.chip.selected {
+  background: var(--pof-navy);
+  color: var(--pof-white);
+  border-color: var(--pof-navy);
+}
+.chip svg { width: 11px; height: 11px; stroke-width: 2.2; }
+
+/* ── FORM FIELDS ───────────────────────────────────────── */
+.form-field {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-bottom: 10px;
+}
+.form-field:last-of-type { margin-bottom: 4px; }
+
+.form-field-label {
+  font-family: "Poppins", sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.required-dot {
+  display: inline-block;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--pof-coral);
+}
+
+.form-field input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-family: "Raleway", sans-serif;
+  font-size: 12.5px;
+  color: var(--text-body);
+  background: var(--bg);
+  transition: border-color .15s, box-shadow .15s;
+}
+.form-field input:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(43,165,149,.15);
+}
+.form-field input.invalid {
+  border-color: var(--pof-error);
+  box-shadow: 0 0 0 3px rgba(220,53,69,.12);
+}
+
+.field-error {
+  font-size: 11px;
+  color: var(--pof-error);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+.field-error svg { width: 12px; height: 12px; stroke-width: 1.8; }
+
+/* ── TOAST (action feedback) ───────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 60px; left: 50%; transform: translateX(-50%) translateY(8px);
+  background: var(--pof-navy);
+  color: var(--pof-white);
+  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  font-family: "Poppins", sans-serif;
+  font-size: 11.5px;
+  font-weight: 500;
+  display: inline-flex; align-items: center; gap: 6px;
+  z-index: 50;
+  opacity: 0;
+  transition: opacity .2s, transform .2s;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(0,0,0,.18);
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast svg { width: 13px; height: 13px; stroke-width: 2; }
+.toast-success svg { color: var(--pof-teal); }
+
+/* ── TASK LIST ─────────────────────────────────────────── */
+.task-list { display: flex; flex-direction: column; gap: 4px; }
+
+.task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px 10px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  transition: border-color .12s, background .12s;
+}
+.task-item:hover { border-color: var(--pof-gray-400); }
+.task-item.done { opacity: 0.55; }
+.task-item.done .task-name { text-decoration: line-through; }
+
+.task-check {
+  width: 20px; height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--pof-gray-400);
+  background: var(--bg);
+  cursor: pointer;
+  padding: 0;
+  margin-top: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: transparent;
+  transition: all .15s;
+}
+.task-check:hover {
+  border-color: var(--pof-teal-dark);
+  background: #F1F8F7;
+  color: var(--pof-teal-dark);
+}
+.task-check svg { width: 12px; height: 12px; stroke-width: 2.5; }
+.task-item.done .task-check {
+  background: var(--pof-teal-dark);
+  border-color: var(--pof-teal-dark);
+  color: var(--pof-white);
+}
+
+.task-info { flex: 1; min-width: 0; }
+.task-name {
+  font-family: "Poppins", sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.35;
+  margin-bottom: 4px;
+  display: block;
+  word-wrap: break-word;
+}
+.task-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-family: "Poppins", sans-serif;
+  font-weight: 500;
+}
+.task-meta .meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.task-meta svg { width: 11px; height: 11px; stroke-width: 1.9; }
+.task-meta .meta-item.overdue { color: var(--pof-error); }
+
+.task-prio {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  font-family: "Poppins", sans-serif;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+}
+.task-prio.p0 { background: #FCE6EA; color: #A02333; }
+.task-prio.p1 { background: #FFF4DC; color: #8A6300; }
+.task-prio.p2 { background: #E6F4F2; color: var(--pof-teal-deep); }
+.task-prio.p3 { background: var(--pof-neutral-mid); color: var(--text-muted); }
+
+.task-arrow {
+  flex-shrink: 0;
+  color: var(--text-xmuted);
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  transition: background .12s, color .12s;
+  text-decoration: none;
+}
+.task-arrow:hover { background: var(--bg-soft); color: var(--text); }
+.task-arrow svg { width: 13px; height: 13px; stroke-width: 1.8; }
+
+/* ── NEW TASK FORM ─────────────────────────────────────── */
+.task-form {
+  background: var(--bg-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  padding: 12px;
+}
+.task-form .form-field input,
+.task-form .form-field textarea {
+  background: var(--bg);
+}
+.task-form textarea { min-height: 56px; }
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* ── SEGMENTED (priority / assignee chips) ─────────────── */
+.segmented {
+  display: flex;
+  background: var(--pof-neutral-mid);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 1px;
+}
+.segmented .seg {
+  flex: 1;
+  padding: 5px 6px;
+  background: transparent;
+  border: none;
+  font-family: "Poppins", sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background .12s, color .12s, box-shadow .12s;
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+.segmented .seg svg { width: 11px; height: 11px; stroke-width: 1.9; }
+.segmented .seg:hover { color: var(--text); }
+.segmented .seg.selected {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow:
+    0 0 0 0.5px rgba(15,15,15,0.05),
+    0 1px 2px rgba(15,15,15,0.08);
+}
+.segmented.prio .seg.selected.p0 { color: #A02333; }
+.segmented.prio .seg.selected.p1 { color: #8A6300; }
+.segmented.prio .seg.selected.p2 { color: var(--pof-teal-deep); }
+.segmented.prio .seg.selected.p3 { color: var(--text); }
+
+/* ── PRE-FILLED HINT ──────────────────────────────────── */
+.prefilled-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: "Poppins", sans-serif;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--pof-teal-dark);
+  background: #E6F4F2;
+  padding: 4px 8px;
+  border-radius: var(--r-pill);
+  margin-bottom: 10px;
+}
+.prefilled-hint svg { width: 11px; height: 11px; stroke-width: 1.9; }

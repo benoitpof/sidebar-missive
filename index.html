@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Raleway:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="sidebar.css?v=2">
+  <link rel="stylesheet" href="sidebar.css?v=8">
 </head>
 <body>
 
@@ -36,9 +36,172 @@
 
     <!-- ── TÂCHE ─────────────────────────────────── -->
     <section class="pane" id="pane-task" data-screen-label="Tâche">
-      <div class="waiting">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4"><path d="M9 11l3 3l8 -8"/><path d="M20 12v6a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h9"/></svg>
-        <div class="msg">Onglet Tâche — à configurer</div>
+
+      <div class="label">Actions rapides</div>
+      <div class="quick-actions">
+
+        <!-- Briefing podcast -->
+        <button class="action-row-btn" data-action="brief-podcast">
+          <span class="action-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M8 21l8 0"/><path d="M12 17l0 4"/></svg>
+          </span>
+          <span class="action-label">Briefing podcast</span>
+          <span class="action-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/></svg>
+          </span>
+        </button>
+
+        <!-- Ajouter à la veille -->
+        <button class="action-row-btn" data-action="add-to-watch">
+          <span class="action-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M18.364 19.364a9 9 0 1 0 -12.728 0"/><path d="M15.536 16.536a5 5 0 1 0 -7.072 0"/><path d="M12 13m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/></svg>
+          </span>
+          <span class="action-label">Ajouter à la veille</span>
+          <span class="action-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 6l6 6l-6 6"/></svg>
+          </span>
+        </button>
+        <div class="action-panel" id="watch-panel" hidden>
+          <div class="panel-hint">Choisir une catégorie :</div>
+          <div class="chips">
+            <button class="chip" data-watch="concurrents">Concurrents</button>
+            <button class="chip" data-watch="strategiques">Stratégiques</button>
+            <button class="chip" data-watch="appels-a-projets">Appels à projets</button>
+          </div>
+        </div>
+
+        <!-- Estimer l'opportunité -->
+        <button class="action-row-btn" data-action="estimate-opp">
+          <span class="action-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0 -10 0"/><path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/></svg>
+          </span>
+          <span class="action-label">Estimer l'opportunité</span>
+          <span class="action-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/></svg>
+          </span>
+        </button>
+
+        <!-- Briefer une réponse -->
+        <button class="action-row-btn" data-action="brief-reply">
+          <span class="action-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M7 7h-1a2 2 0 0 0 -2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2 -2v-1"/><path d="M20.385 6.585a2.1 2.1 0 0 0 -2.97 -2.97l-8.415 8.385v3h3l8.385 -8.415z"/><path d="M16 5l3 3"/></svg>
+          </span>
+          <span class="action-label">Briefer une réponse</span>
+          <span class="action-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 6l6 6l-6 6"/></svg>
+          </span>
+        </button>
+        <div class="action-panel" id="reply-panel" hidden>
+          <div class="panel-hint">Instructions à transmettre à l'agent qui rédigera la réponse :</div>
+          <textarea id="reply-instructions" rows="4" placeholder="Ex : remercier, demander l'accord pour un appel cette semaine, ne pas s'engager sur le ticket avant validation…"></textarea>
+          <div class="save-bar">
+            <button class="btn btn-ghost" type="button" onclick="document.querySelector('[data-action=brief-reply]').click()">Annuler</button>
+            <button class="btn btn-primary" id="reply-submit" type="button">Lancer</button>
+          </div>
+        </div>
+
+        <!-- Signer un NDA -->
+        <button class="action-row-btn" data-action="sign-nda">
+          <span class="action-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M11.46 20.846a12 12 0 0 1 -7.96 -14.846a12 12 0 0 0 8.5 -3a12 12 0 0 0 8.5 3a12 12 0 0 1 -.09 7.06"/><path d="M15 19l2 2l4 -4"/></svg>
+          </span>
+          <span class="action-label">Signer un NDA</span>
+          <span class="action-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 6l6 6l-6 6"/></svg>
+          </span>
+        </button>
+        <form class="action-panel" id="nda-panel" hidden>
+          <div class="panel-hint">Vérifier les champs pré-remplis avant envoi :</div>
+          <div class="form-field">
+            <label class="form-field-label">Signataire <span class="required-dot"></span></label>
+            <input name="signataire" type="text" value="Marc Castagnet" required>
+          </div>
+          <div class="form-field">
+            <label class="form-field-label">Email <span class="required-dot"></span></label>
+            <input name="email" type="email" value="marc.castagnet@icservices.com.hk" required>
+          </div>
+          <div class="form-field">
+            <label class="form-field-label">Société <span class="required-dot"></span></label>
+            <input name="societe" type="text" value="ICS Services Ltd." required>
+          </div>
+          <div class="form-field">
+            <label class="form-field-label">Date d'effet <span class="required-dot"></span></label>
+            <input name="date" type="date" value="2026-05-17" required>
+          </div>
+          <div class="field-error" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z"/><path d="M12 16h.01"/></svg>
+            Veuillez remplir tous les champs obligatoires.
+          </div>
+          <div class="save-bar">
+            <button class="btn btn-ghost" type="button" onclick="document.querySelector('[data-action=sign-nda]').click()">Annuler</button>
+            <button class="btn btn-primary" id="nda-submit" type="button">Envoyer le NDA</button>
+          </div>
+        </form>
+
+      </div>
+
+      <hr class="divider">
+
+      <!-- Tâches liées (existantes) -->
+      <div class="label">Tâches liées (<span id="task-count">0</span>)</div>
+      <div class="task-list" id="task-list">
+        <!-- populated by JS -->
+      </div>
+
+      <hr class="divider">
+
+      <!-- Nouvelle tâche -->
+      <div class="label">Nouvelle tâche</div>
+      <div class="task-form" id="new-task-form">
+        <div class="prefilled-hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/></svg>
+          Pré-rempli depuis la conversation
+        </div>
+
+        <div class="form-field">
+          <label class="form-field-label">Nom</label>
+          <input name="name" type="text" id="task-name" value="Répondre à Marc Castagnet sur l'entrée au capital ICS">
+        </div>
+
+        <div class="form-field">
+          <label class="form-field-label">Description</label>
+          <textarea id="task-desc" rows="3">Marc propose 100K€ via ICS Services. Confirmer participation, demander accord pour appel cette semaine. Ne pas s'engager sur valorisation avant validation Benoît.</textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-field-label">Deadline</label>
+            <input name="deadline" type="date" id="task-deadline" value="2026-05-20">
+          </div>
+          <div class="form-field">
+            <label class="form-field-label">Priorité</label>
+            <div class="segmented prio" id="task-prio">
+              <button type="button" class="seg p0" data-val="P0">P0</button>
+              <button type="button" class="seg p1 selected" data-val="P1">P1</button>
+              <button type="button" class="seg p2" data-val="P2">P2</button>
+              <button type="button" class="seg p3" data-val="P3">P3</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label class="form-field-label">Assignation</label>
+          <div class="segmented" id="task-assignee">
+            <button type="button" class="seg selected" data-val="ai">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5h12a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2z"/><path d="M9 16c1 .667 2 1 3 1s2 -.333 3 -1"/><path d="M9 7l-1 -4"/><path d="M15 7l1 -4"/><circle cx="9" cy="11" r=".5" fill="currentColor"/><circle cx="15" cy="11" r=".5" fill="currentColor"/></svg>
+              IA
+            </button>
+            <button type="button" class="seg" data-val="human">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/></svg>
+              Humain
+            </button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-block" id="task-create" type="button" style="margin-top:4px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" style="width:13px;height:13px"><path d="M12 5l0 14"/><path d="M5 12l14 0"/></svg>
+          Créer la tâche
+        </button>
       </div>
     </section>
 
@@ -87,8 +250,8 @@
   </footer>
 
   <!-- ═══════════════════════════════════ MOCK (preview only) ═══ -->
-  <!-- Mock activates ONLY when ?preview=1 is in the URL (standalone design review).
-       In Missive prod, the SDK script tag below loads first and provides window.Missive. -->
+  <!-- Mock activates ONLY when ?preview=1 is in the URL. En prod Missive,
+       la SDK script tag ci-dessous charge synchroniquement et fournit window.Missive. -->
   <script>
     if (location.search.indexOf('preview=1') !== -1) {
       window.__POF_MOCK = true;
@@ -153,6 +316,53 @@
               notion_page_id: 'newly000created111page222',
               notion_page_url: 'https://notion.so/newly000created111page222',
             });
+            // Task actions
+            if (action === 'brief_podcast')        return resolve({ success: true });
+            if (action === 'add_to_watch')         return resolve({ success: true });
+            if (action === 'estimate_opportunity') return resolve({ success: true });
+            if (action === 'brief_reply')          return resolve({ success: true });
+            if (action === 'send_nda')             return resolve({ success: true });
+            if (action === 'enrich_contact')       return resolve({ success: true });
+            // Task backlog
+            if (action === 'list_tasks') {
+              return resolve({
+                tasks: [
+                  {
+                    id: 't1',
+                    name: 'Envoyer term-sheet ICS révisé',
+                    prio: 'P1',
+                    assignee: 'human',
+                    deadline: '2026-05-18',
+                    done: false,
+                    notion_url: 'https://notion.so/task-t1',
+                  },
+                  {
+                    id: 't2',
+                    name: 'Confirmer disponibilité Benoît pour call mercredi',
+                    prio: 'P2',
+                    assignee: 'ai',
+                    deadline: '2026-05-15',
+                    done: true,
+                    notion_url: 'https://notion.so/task-t2',
+                  },
+                ]
+              });
+            }
+            if (action === 'create_task') {
+              return resolve({
+                success: true,
+                task: {
+                  id: 't' + Date.now(),
+                  name: args.name,
+                  prio: args.prio,
+                  assignee: args.assignee,
+                  deadline: args.deadline,
+                  done: false,
+                  notion_url: 'https://notion.so/task-' + Date.now(),
+                }
+              });
+            }
+            if (action === 'toggle_task') return resolve({ success: true });
             resolve({});
           }, delay);
         });
@@ -183,8 +393,8 @@
     }
   </script>
 
-  <!-- Missive SDK (prod). Skipped in preview mode where the mock above
-       has already set window.Missive. -->
+  <!-- Missive SDK (prod). Synchrone via document.write pour garantir l'ordre
+       avant sidebar.js. Skippé en mode preview standalone. -->
   <script>
     if (!window.__POF_MOCK) {
       document.write('<scr' + 'ipt src="https://missiveapp.com/open/sidebar-sdk/2.0/sdk.js"></scr' + 'ipt>');
@@ -192,7 +402,7 @@
   </script>
 
   <!-- Sidebar logic -->
-  <script src="sidebar.js?v=2"></script>
+  <script src="sidebar.js?v=8"></script>
 
 </body>
 </html>

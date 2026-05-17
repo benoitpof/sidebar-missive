@@ -42,7 +42,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.4' };       break;
+      case 'ping':                       result = { ok: true, version: '1.5' };       break;
       case 'dump_persons':               result = handleDumpPersons_(body);           break;
       case 'lookup_person':              result = handleLookupPerson_(body);          break;
       case 'create_person':              result = handleCreatePerson_(body);          break;
@@ -50,6 +50,15 @@ function doPost(e) {
       case 'lookup_conv':                result = handleLookupConv_(body);            break;
       case 'upsert_conv':                result = handleUpsertConv_(body);            break;
       case 'list_conv_tasks':            result = handleListConvTasks_(body);         break;
+      case 'list_tasks':                 result = handleListTasks_(body);             break;
+      case 'create_task':                result = handleCreateTask_(body);            break;
+      case 'toggle_task':                result = handleToggleTask_(body);            break;
+      case 'brief_podcast':              result = handleQueueAgentTask_(body, 'brief_podcast');        break;
+      case 'add_to_watch':               result = handleQueueAgentTask_(body, 'add_to_watch');         break;
+      case 'estimate_opportunity':       result = handleQueueAgentTask_(body, 'estimate_opportunity'); break;
+      case 'brief_reply':                result = handleQueueAgentTask_(body, 'brief_reply');          break;
+      case 'send_nda':                   result = handleQueueAgentTask_(body, 'send_nda');             break;
+      case 'enrich_contact':             result = handleQueueAgentTask_(body, 'enrich_contact');       break;
       case 'lookup_folk':                result = handleLookupFolk_(body);            break;
       default:                           return json_({ error: 'unknown action: ' + action });
     }
@@ -60,7 +69,262 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.4' });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.5' });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TASKS BACKLOG (lecture / création / toggle)
+   ═══════════════════════════════════════════════════════════════ */
+
+const TASKS_DB_ID = '332c2ce245e8807ea247f8a7c403c53d';
+const TASKS_TITLE_PROP = 'Virements persos '; // titre de la DB (sic, espace inclus)
+
+/** Map spec prio (P0/P1/P2/P3) -> Notion option. P0 et P1 -> Prio 1. */
+function priorityToNotion_(prio) {
+  if (prio === 'P0' || prio === 'P1') return 'Prio 1';
+  if (prio === 'P2') return 'Prio 2';
+  if (prio === 'P3') return 'Prio 3';
+  return 'Prio 2';
+}
+function notionToPriority_(name) {
+  if (name === 'Prio 1') return 'P1';
+  if (name === 'Prio 2') return 'P2';
+  if (name === 'Prio 3') return 'P3';
+  return 'P2';
+}
+function assigneeToMode_(assignee) {
+  return assignee === 'human' ? 'Humain' : "Confier à l'IA";
+}
+function modeToAssignee_(mode) {
+  return mode === 'Humain' ? 'human' : 'ai';
+}
+
+/** Récupère ou crée la page Conversation pour ce convId. Renvoie le pageId. */
+function ensureConvPage_(convId) {
+  var dbId = cfg_('NOTION_CONVS_DB');
+  var idProp = cfg_('CONV_MISSIVE_ID_PROP') || 'Agent session ID';
+  var search = notionFetch_('POST', '/databases/' + dbId + '/query', {
+    filter: { property: idProp, rich_text: { equals: convId } }, page_size: 1
+  });
+  if (search.results && search.results.length) return search.results[0].id;
+  var newProps = {};
+  newProps['Nom'] = { title: [{ text: { content: 'Conv. ' + convId.slice(0, 12) } }] };
+  newProps[idProp] = { rich_text: [{ text: { content: convId } }] };
+  var created = notionFetch_('POST', '/pages', {
+    parent: { database_id: dbId }, properties: newProps
+  });
+  return created.id;
+}
+
+/* ─── list_tasks ───────────────────────────────────────────── */
+function handleListTasks_(body) {
+  var convId = String(body.conversation_id || '');
+  if (!convId) return { tasks: [] };
+
+  var dbId = cfg_('NOTION_CONVS_DB');
+  var idProp = cfg_('CONV_MISSIVE_ID_PROP') || 'Agent session ID';
+  var search = notionFetch_('POST', '/databases/' + dbId + '/query', {
+    filter: { property: idProp, rich_text: { equals: convId } }, page_size: 1
+  });
+  if (!search.results || !search.results.length) return { tasks: [] };
+
+  var rel = (search.results[0].properties['Tâche associée'] &&
+             search.results[0].properties['Tâche associée'].relation) || [];
+
+  var tasks = [];
+  for (var i = 0; i < rel.length && i < 30; i++) {
+    try {
+      var page = notionFetch_('GET', '/pages/' + rel[i].id, null);
+      var p = page.properties || {};
+      var title = (p[TASKS_TITLE_PROP] && p[TASKS_TITLE_PROP].title) || [];
+      var prio = (p['Priorité'] && p['Priorité'].select && p['Priorité'].select.name) || '';
+      var mode = (p['Mode'] && p['Mode'].select && p['Mode'].select.name) || '';
+      var etat = (p['Etat'] && p['Etat'].status && p['Etat'].status.name) || '';
+      var due  = (p['Due'] && p['Due'].date && p['Due'].date.start) || '';
+      tasks.push({
+        id: page.id,
+        name: richTextValue_(title),
+        prio: notionToPriority_(prio),
+        assignee: modeToAssignee_(mode),
+        deadline: due,
+        done: (etat === 'Terminé' || etat === 'Archivé'),
+        notion_url: page.url || notionPageUrl_(page.id)
+      });
+    } catch (_e) { /* skip */ }
+  }
+  return { tasks: tasks };
+}
+
+/* ─── create_task ──────────────────────────────────────────── */
+function handleCreateTask_(body) {
+  var convId   = String(body.conversation_id || '');
+  var name     = String(body.name || '').trim();
+  var desc     = String(body.description || '');
+  var deadline = String(body.deadline || '');
+  var prio     = String(body.prio || 'P2');
+  var assignee = String(body.assignee || 'ai');
+
+  if (!convId) throw new Error('conversation_id required');
+  if (!name)   throw new Error('name required');
+
+  // 1. Garantit l'existence de la page Conversation
+  var convPageId = ensureConvPage_(convId);
+
+  // 2. Crée la tâche
+  var properties = {};
+  properties[TASKS_TITLE_PROP] = { title: [{ text: { content: name } }] };
+  properties['Priorité'] = { select: { name: priorityToNotion_(prio) } };
+  properties['Mode'] = { select: { name: assigneeToMode_(assignee) } };
+  properties['Etat'] = { status: { name: 'A faire' } };
+  if (desc)     properties['Prompt'] = { rich_text: [{ text: { content: desc } }] };
+  if (deadline) properties['Due'] = { date: { start: deadline } };
+
+  var task = notionFetch_('POST', '/pages', {
+    parent: { database_id: TASKS_DB_ID }, properties: properties
+  });
+
+  // 3. Lie la tâche à la conversation (PATCH la relation côté Conversation)
+  try {
+    var convPage = notionFetch_('GET', '/pages/' + convPageId, null);
+    var existing = (convPage.properties['Tâche associée'] &&
+                    convPage.properties['Tâche associée'].relation) || [];
+    existing.push({ id: task.id });
+    notionFetch_('PATCH', '/pages/' + convPageId, {
+      properties: { 'Tâche associée': { relation: existing } }
+    });
+  } catch (e) {
+    // Lien échoué -> on garde la tâche mais on remonte un warning
+  }
+
+  return {
+    success: true,
+    task: {
+      id: task.id,
+      name: name,
+      prio: prio,
+      assignee: assignee,
+      deadline: deadline,
+      done: false,
+      notion_url: task.url || notionPageUrl_(task.id)
+    }
+  };
+}
+
+/* ─── toggle_task ──────────────────────────────────────────── */
+function handleToggleTask_(body) {
+  var id   = String(body.id || '');
+  var done = !!body.done;
+  if (!id) throw new Error('id required');
+  var properties = {
+    'Etat': { status: { name: done ? 'Terminé' : 'A faire' } }
+  };
+  if (done) properties['Done'] = { date: { start: new Date().toISOString().slice(0, 10) } };
+  else      properties['Done'] = { date: null };
+  notionFetch_('PATCH', '/pages/' + id, { properties: properties });
+  return { success: true };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ACTIONS IA — Mode "queue agent task"
+   Chaque action sidebar crée une tâche Backlog en Mode=Confier à l'IA
+   avec un prompt typé. L'agent execute-task-backlog (cron 3x/jour)
+   ou Build-Lead traite ensuite selon le Type d'action.
+   ═══════════════════════════════════════════════════════════════ */
+
+const AGENT_TASK_TEMPLATES = {
+  brief_podcast: {
+    title: 'Briefing podcast — conv %CONV%',
+    type:  'Recherche',
+    prompt_prefix: 'Génère un brief podcast à partir du contenu de la conversation Missive %CONV%. Format : 3-4 angles, citations clés, recommandation diffusion. Source : conv Missive.\n\nContext:\n'
+  },
+  add_to_watch: {
+    title: 'Ajouter à la veille (%CATEGORY%) — conv %CONV%',
+    type:  'Recherche',
+    prompt_prefix: 'Ajouter cette conversation à la veille stratégique POF, catégorie %CATEGORY%. Trigger : veille-strategique-hebdo.\n\nContext:\n'
+  },
+  estimate_opportunity: {
+    title: "Estimer l'opportunité — conv %CONV%",
+    type:  'Recherche',
+    prompt_prefix: "Évalue l'opportunité business de cette conversation Missive : taille du deal, probabilité, échéance, next steps. Poste le résultat en commentaire Missive sur la conversation.\n\nContext:\n"
+  },
+  brief_reply: {
+    title: 'Brief réponse — conv %CONV%',
+    type:  'Mail',
+    prompt_prefix: 'Rédige un brouillon de réponse pour la conversation Missive selon les instructions ci-dessous. Pose le brouillon en draft dans Missive.\n\nInstructions :\n'
+  },
+  send_nda: {
+    title: 'Envoyer NDA à %SIGNATAIRE% (%SOCIETE%)',
+    type:  'Autre',
+    prompt_prefix: "Trigger workflow Odoo Sign (skill odoo-sign-launcher) avec template NDA POF. Paramètres :\n"
+  },
+  enrich_contact: {
+    title: 'Enrichir fiche Notion — conv %CONV%',
+    type:  'Recherche',
+    prompt_prefix: "Enrichir la fiche Notion du contact principal de la conversation Missive. Utiliser tavily-research + sources publiques. Mettre à jour les champs Notion existants (rôle, société, URLs, etc.).\n\nInstructions Benoit :\n"
+  }
+};
+
+function handleQueueAgentTask_(body, kind) {
+  var convId = String(body.conversation_id || '');
+  if (!convId) return { success: false, error: 'conversation_id required' };
+
+  var tpl = AGENT_TASK_TEMPLATES[kind];
+  if (!tpl) return { success: false, error: 'unknown agent action: ' + kind };
+
+  var title = tpl.title
+    .replace('%CONV%', convId.slice(0, 12))
+    .replace('%CATEGORY%', String(body.category || ''))
+    .replace('%SIGNATAIRE%', String(body.signataire || ''))
+    .replace('%SOCIETE%', String(body.societe || ''));
+
+  // Construit le prompt en assemblant prefix + args utiles
+  var promptBody = '';
+  if (body.instructions) promptBody += String(body.instructions) + '\n\n';
+  if (body.category)     promptBody += 'Category: ' + body.category + '\n';
+  if (body.signataire)   promptBody += 'Signataire: ' + body.signataire + '\n';
+  if (body.email)        promptBody += 'Email: ' + body.email + '\n';
+  if (body.societe)      promptBody += 'Société: ' + body.societe + '\n';
+  if (body.date)         promptBody += "Date d'effet: " + body.date + '\n';
+  promptBody += '\nConversation Missive ID: ' + convId;
+
+  var prompt = tpl.prompt_prefix + promptBody;
+
+  // Garantit l'existence de la page Conversation pour pouvoir lier
+  var convPageId = null;
+  try { convPageId = ensureConvPage_(convId); } catch (_e) {}
+
+  // Crée la tâche
+  var properties = {};
+  properties[TASKS_TITLE_PROP] = { title: [{ text: { content: title } }] };
+  properties['Type d\'action'] = { select: { name: tpl.type } };
+  properties['Mode']    = { select: { name: "Confier à l'IA" } };
+  properties['Etat']    = { status: { name: 'A faire' } };
+  properties['Priorité']= { select: { name: 'Prio 2' } };
+  properties['Prompt']  = { rich_text: [{ text: { content: prompt.slice(0, 2000) } }] };
+
+  var task = notionFetch_('POST', '/pages', {
+    parent: { database_id: TASKS_DB_ID }, properties: properties
+  });
+
+  // Lien depuis la Conversation
+  if (convPageId) {
+    try {
+      var convPage = notionFetch_('GET', '/pages/' + convPageId, null);
+      var existing = (convPage.properties['Tâche associée'] &&
+                      convPage.properties['Tâche associée'].relation) || [];
+      existing.push({ id: task.id });
+      notionFetch_('PATCH', '/pages/' + convPageId, {
+        properties: { 'Tâche associée': { relation: existing } }
+      });
+    } catch (_e) {}
+  }
+
+  return {
+    success: true,
+    queued: true,
+    task_id: task.id,
+    task_url: task.url || notionPageUrl_(task.id)
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════
