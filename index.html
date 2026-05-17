@@ -3,671 +3,196 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sidebar Notion</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>
-    /* ── TOKENS ─────────────────────────────────────────── */
-    :root {
-      --bg:          #ffffff;
-      --surface:     #f7f6f3;
-      --border:      #e8e5e0;
-      --border-focus:#2383e2;
-      --text:        #1b1b18;
-      --muted:       #8b8782;
-      --xmuted:      #c2bfba;
-      --accent:      #2383e2;
-      --accent-bg:   #eaf2fd;
-      --green:       #0a7242;
-      --green-bg:    #ecf7f1;
-      --amber:       #a05c00;
-      --amber-bg:    #fef6ea;
-      --red:         #c0392b;
-      --red-bg:      #fef0ee;
-      --r:           5px;
-      --r-lg:        8px;
-    }
+  <title>POF Sidebar — Notion / Missive</title>
 
-    /* ── RESET ───────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  <!-- Fonts (POF DS) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Raleway:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-    body {
-      font-family: 'DM Sans', system-ui, sans-serif;
-      font-size: 13px;
-      line-height: 1.5;
-      background: var(--bg);
-      color: var(--text);
-      overflow-x: hidden;
-    }
-
-    /* ── TABS ────────────────────────────────────────────── */
-    .tabs {
-      display: flex;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-
-    .tab {
-      flex: 1;
-      padding: 10px 4px;
-      text-align: center;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--muted);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: color 0.15s, border-color 0.15s;
-      user-select: none;
-    }
-
-    .tab:hover { color: var(--text); }
-    .tab.active { color: var(--text); border-bottom-color: var(--text); }
-
-    /* ── SCROLL AREA ─────────────────────────────────────── */
-    .scroll { overflow-y: auto; height: calc(100vh - 41px); }
-    .pane { display: none; padding: 14px 12px 32px; }
-    .pane.active { display: block; }
-
-    /* ── SECTION LABEL ───────────────────────────────────── */
-    .label {
-      font-size: 10.5px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--xmuted);
-      margin-bottom: 8px;
-    }
-
-    /* ── DIVIDER ─────────────────────────────────────────── */
-    .divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
-
-    /* ── PERSON CARD ─────────────────────────────────────── */
-    .card {
-      border: 1px solid var(--border);
-      border-radius: var(--r-lg);
-      padding: 12px;
-      background: var(--surface);
-      margin-bottom: 6px;
-    }
-
-    .person-header { display: flex; align-items: center; gap: 10px; }
-
-    .avatar {
-      width: 34px; height: 34px;
-      border-radius: 50%;
-      background: var(--text);
-      color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 600;
-      flex-shrink: 0;
-      letter-spacing: 0.02em;
-    }
-
-    .person-meta { flex: 1; min-width: 0; }
-    .person-name { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .person-email { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-    /* ── BADGES ──────────────────────────────────────────── */
-    .badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2px 7px;
-      border-radius: 100px;
-      font-size: 11px; font-weight: 500;
-      white-space: nowrap; flex-shrink: 0;
-    }
-    .badge-green  { background: var(--green-bg);  color: var(--green); }
-    .badge-amber  { background: var(--amber-bg);  color: var(--amber); }
-    .badge-red    { background: var(--red-bg);    color: var(--red); }
-    .badge-muted  { background: var(--surface);   color: var(--muted); border: 1px solid var(--border); }
-
-    /* ── BUTTONS ─────────────────────────────────────────── */
-    .btn {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 5px 11px;
-      border-radius: var(--r);
-      font-family: inherit; font-size: 12.5px; font-weight: 500;
-      cursor: pointer; transition: all 0.13s;
-      border: 1px solid transparent; text-decoration: none;
-    }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .btn-dark    { background: var(--text); color: #fff; }
-    .btn-dark:hover:not(:disabled) { background: #333; }
-
-    .btn-outline { background: var(--bg); color: var(--text); border-color: var(--border); }
-    .btn-outline:hover:not(:disabled) { background: var(--surface); }
-
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover:not(:disabled) { background: #1a6fc7; }
-
-    .btn-ghost { background: transparent; color: var(--muted); padding: 5px 8px; }
-    .btn-ghost:hover { background: var(--surface); color: var(--text); }
-
-    /* ── TEXT AREAS ──────────────────────────────────────── */
-    textarea {
-      width: 100%; border: 1px solid var(--border); border-radius: var(--r);
-      padding: 8px 10px; font-family: inherit; font-size: 12.5px;
-      color: var(--text); background: var(--bg); resize: vertical;
-      min-height: 72px; line-height: 1.55; transition: border-color 0.15s;
-    }
-    textarea:focus { outline: none; border-color: var(--border-focus); }
-    textarea::placeholder { color: var(--xmuted); }
-
-    /* ── SAVE BAR ────────────────────────────────────────── */
-    .save-bar {
-      display: flex; justify-content: flex-end; align-items: center;
-      gap: 6px; margin-top: 7px;
-    }
-
-    /* ── FIELD LABEL ─────────────────────────────────────── */
-    .field-label {
-      font-size: 11.5px; font-weight: 600; color: var(--muted);
-      margin-bottom: 6px; display: flex; align-items: center; gap: 5px;
-    }
-
-    /* ── PARTICIPANT LIST ────────────────────────────────── */
-    .participant {
-      display: flex; align-items: center; gap: 9px;
-      padding: 7px 8px; border-radius: var(--r);
-      cursor: pointer; transition: background 0.1s;
-    }
-    .participant:hover { background: var(--surface); }
-
-    .p-dot {
-      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-      background: var(--xmuted); transition: background 0.3s;
-    }
-    .p-dot.found { background: var(--green); }
-
-    .p-info { flex: 1; min-width: 0; }
-    .p-name  { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .p-email { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .p-arrow { color: var(--xmuted); font-size: 12px; flex-shrink: 0; }
-
-    /* ── LOADING STATES ──────────────────────────────────── */
-    .spinner {
-      width: 13px; height: 13px; border-radius: 50%;
-      border: 2px solid var(--border); border-top-color: var(--accent);
-      animation: spin 0.65s linear infinite; flex-shrink: 0;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .skeleton {
-      height: 12px; border-radius: 3px;
-      background: linear-gradient(90deg, var(--surface) 25%, var(--border) 50%, var(--surface) 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.4s ease-in-out infinite;
-    }
-    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-
-    /* ── EMPTY / WAIT ────────────────────────────────────── */
-    .waiting {
-      display: flex; flex-direction: column; align-items: center;
-      gap: 10px; padding: 36px 16px; color: var(--muted); text-align: center;
-    }
-    .waiting .big-icon { font-size: 28px; }
-
-    /* ── INLINE SEARCH STATUS ────────────────────────────── */
-    .search-status {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 12px; color: var(--muted); margin-top: 10px;
-    }
-
-    /* ── CONVERSATION ID ─────────────────────────────────── */
-    .conv-id {
-      font-size: 10.5px; color: var(--xmuted);
-      word-break: break-all; margin-top: 4px;
-    }
-
-    /* ── ACTION ROW ──────────────────────────────────────── */
-    .action-row { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
-
-    /* ── FADE IN ─────────────────────────────────────────── */
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(4px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .fade-up { animation: fadeUp 0.2s ease forwards; }
-  </style>
+  <link rel="stylesheet" href="sidebar.css?v=2">
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════ TABS -->
-<div class="tabs">
-  <div class="tab" data-pane="task">☑ Tâche</div>
-  <div class="tab active" data-pane="contact">👤 Contact</div>
-  <div class="tab" data-pane="conv">💬 Conv.</div>
-</div>
-
-<div class="scroll">
-
-  <!-- ── TÂCHE ──────────────────────────────────────────── -->
-  <div class="pane" id="pane-task">
-    <div class="waiting">
-      <div class="big-icon">☑</div>
-      <div>Onglet Tâche — à configurer</div>
-    </div>
+  <!-- ═══════════════════════════════════════════════ TABS -->
+  <div class="tabs-wrap">
+    <nav class="tabs" role="tablist">
+      <button class="tab" data-pane="task" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 11l3 3l8 -8"/><path d="M20 12v6a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h9"/></svg>
+        Tâche
+      </button>
+      <button class="tab active" data-pane="contact" role="tab" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/></svg>
+        Contact
+      </button>
+      <button class="tab" data-pane="conv" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M4 21v-13a3 3 0 0 1 3 -3h10a3 3 0 0 1 3 3v6a3 3 0 0 1 -3 3h-9l-4 4"/><path d="M8 9h8"/><path d="M8 13h6"/></svg>
+        Conv.
+      </button>
+    </nav>
   </div>
 
-  <!-- ── CONTACT ────────────────────────────────────────── -->
-  <div class="pane active" id="pane-contact">
-    <div class="label">Contact principal</div>
-    <div id="main-contact">
+  <div class="scroll">
+
+    <!-- ── TÂCHE ─────────────────────────────────── -->
+    <section class="pane" id="pane-task" data-screen-label="Tâche">
       <div class="waiting">
-        <div class="spinner"></div>
-        <div>En attente d'une conversation…</div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4"><path d="M9 11l3 3l8 -8"/><path d="M20 12v6a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h9"/></svg>
+        <div class="msg">Onglet Tâche — à configurer</div>
       </div>
-    </div>
+    </section>
 
-    <div id="others-section" style="display:none">
-      <hr class="divider">
-      <div class="label">Autres participants</div>
-      <div id="others-list"></div>
-    </div>
-  </div>
-
-  <!-- ── CONVERSATION ───────────────────────────────────── -->
-  <div class="pane" id="pane-conv">
-    <div class="label">Instructions conversation</div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6;">
-      Ces instructions sont accessibles par les agents de traitement pour contextualiser leurs actions sur cette conversation.
-    </p>
-    <textarea id="conv-textarea" rows="6" placeholder="Ex : Marc est en négociation avancée. Rester factuel, pas d'engagement tarifaire sans validation Benoît…"></textarea>
-    <div class="save-bar">
-      <button class="btn btn-ghost" onclick="resetConv()">Annuler</button>
-      <button class="btn btn-primary" id="conv-save-btn" onclick="saveConv()">Sauvegarder</button>
-    </div>
-
-    <hr class="divider" style="margin-top:20px">
-    <div class="label">Missive conversation ID</div>
-    <div class="conv-id" id="conv-missive-id">—</div>
-  </div>
-
-</div><!-- /scroll -->
-
-<!-- Missive Sidebar SDK -->
-<script src="https://missiveapp.com/open/sidebar-sdk/2.0/sdk.js"></script>
-
-<script>
-/* ═══════════════════════════════════════════════════════════════
-   CONFIGURATION
-   Tous les secrets (clé Anthropic, IDs Notion) vivent côté GAS proxy.
-   Le frontend ne connaît que l'URL du proxy et un PUBLIC_TOKEN d'usage.
-   ═══════════════════════════════════════════════════════════════ */
-const CFG = {
-  PROXY_URL:   'https://script.google.com/macros/s/AKfycbyWYMvnepoAivX4Hb2NOZRFFd40XPuxD3SJWxUiunmdPimmJUcT7dXZpLbikyCZ5Hki/exec',
-  PROXY_TOKEN: 'c191e56286569c1fecd30e7d61ba3c66',
-};
-
-/* ═══════════════════════════════════════════════════════════════
-   STATE
-   ═══════════════════════════════════════════════════════════════ */
-const S = {
-  conversationId:  null,
-  participants:    [],
-  convPageId:      null,
-  convOrigText:    '',
-};
-
-/* ═══════════════════════════════════════════════════════════════
-   TABS
-   ═══════════════════════════════════════════════════════════════ */
-document.querySelectorAll('.tab').forEach(t => {
-  t.addEventListener('click', () => {
-    const target = t.dataset.pane;
-    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
-    document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + target));
-  });
-});
-
-/* ═══════════════════════════════════════════════════════════════
-   MISSIVE SDK — Point d'entrée
-   ═══════════════════════════════════════════════════════════════ */
-Missive.on('conversation', async function(id, { conversation }) {
-  if (id === S.conversationId) return;
-  S.conversationId = id;
-  S.convPageId = null;
-  S.convOrigText = '';
-  document.getElementById('conv-textarea').value = '';
-
-  document.getElementById('conv-missive-id').textContent = id || '—';
-
-  const participants = extractParticipants(conversation);
-  S.participants = participants;
-
-  if (!participants.length) { renderNoContact(); return; }
-
-  // Contact principal = premier expéditeur identifié
-  const main   = participants[0];
-  const others = participants.slice(1);
-
-  renderMainLoading(main);
-  renderOthers(others, id);
-  loadConvInstructions(id);
-
-  // Recherche Notion + fallback Folk pour le contact principal
-  const notionData = await lookupInNotion(main);
-  if (id !== S.conversationId) return; // conversation a changé entre-temps
-  renderMain(main, notionData, others);
-});
-
-/* ═══════════════════════════════════════════════════════════════
-   EXTRACT PARTICIPANTS
-   ═══════════════════════════════════════════════════════════════ */
-function extractParticipants(conv) {
-  const seen = new Set();
-  const list = [];
-
-  const add = field => {
-    const arr = Array.isArray(field) ? field : (field ? [field] : []);
-    arr.forEach(p => {
-      const email = (p.address || p.email || '').toLowerCase().trim();
-      const name  = p.name || email.split('@')[0] || '';
-      if (email && !seen.has(email)) {
-        seen.add(email);
-        list.push({ name, email });
-      }
-    });
-  };
-
-  // Missive SDK v2 structure (adapter si votre version diffère)
-  const msg = conv?.latest_message || conv?.messages?.[0];
-  if (msg) {
-    add(msg.from_field);
-    add(msg.to_fields);
-    add(msg.cc_fields);
-  }
-
-  // Fallback structure alternative
-  if (!list.length && conv?.contacts) conv.contacts.forEach(add);
-
-  return list;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   APPEL DU GAS PROXY
-   Le proxy fait l'appel Anthropic + MCP côté serveur.
-   Content-Type text/plain pour éviter le preflight CORS (GAS ne gère pas OPTIONS).
-   ═══════════════════════════════════════════════════════════════ */
-async function callProxy(action, args = {}) {
-  try {
-    const res = await fetch(CFG.PROXY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, token: CFG.PROXY_TOKEN, ...args }),
-      redirect: 'follow',
-    });
-    if (!res.ok) return { error: `proxy ${res.status}` };
-    return await res.json();
-  } catch (e) {
-    return { error: String(e && e.message || e) };
-  }
-}
-
-/* ── Notion lookup ────────────────────────────────────────── */
-async function lookupInNotion(person) {
-  return callProxy('lookup_person', { email: person.email, name: person.name });
-}
-
-/* ── Folk lookup ──────────────────────────────────────────── */
-async function lookupInFolk(person) {
-  return callProxy('lookup_folk', { email: person.email, name: person.name });
-}
-
-/* ── Notion: lookup participants (batch) ──────────────────── */
-async function lookupParticipantInNotion(person) {
-  return lookupInNotion(person);
-}
-
-/* ── Notion: create person ────────────────────────────────── */
-async function createPersonInNotion(person) {
-  return callProxy('create_person', { email: person.email, name: person.name });
-}
-
-/* ── Notion: update person instructions ───────────────────── */
-async function updatePersonInstructions(pageId, text) {
-  return callProxy('update_person_instructions', { page_id: pageId, text });
-}
-
-/* ── Conversation instructions ────────────────────────────── */
-async function loadConvInstructions(convId) {
-  const data = await callProxy('lookup_conv', { missive_conversation_id: convId });
-  const instructions = data?.instructions || '';
-  S.convPageId  = data?.notion_page_id || null;
-  S.convOrigText = instructions;
-  document.getElementById('conv-textarea').value = instructions;
-}
-
-async function saveConv() {
-  const text = document.getElementById('conv-textarea').value;
-  const btn  = document.getElementById('conv-save-btn');
-  btn.textContent = 'Sauvegarde…'; btn.disabled = true;
-
-  const r = await callProxy('upsert_conv', {
-    missive_conversation_id: S.conversationId,
-    text,
-    ...(S.convPageId ? { page_id: S.convPageId } : {}),
-  });
-
-  if (r?.notion_page_id) S.convPageId = r.notion_page_id;
-  S.convOrigText = text;
-  btn.textContent = r?.success ? '✓ Sauvegardé' : '✗ Erreur';
-  setTimeout(() => { btn.textContent = 'Sauvegarder'; btn.disabled = false; }, 2000);
-}
-
-function resetConv() {
-  document.getElementById('conv-textarea').value = S.convOrigText;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   RENDER — HELPERS
-   ═══════════════════════════════════════════════════════════════ */
-function initials(name) {
-  return name.split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 2) || '?';
-}
-
-function esc(s) {
-  if (!s) return '';
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function notionHref(pageId) {
-  return `https://notion.so/${(pageId || '').replace(/-/g, '')}`;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   RENDER — MAIN CONTACT
-   ═══════════════════════════════════════════════════════════════ */
-function renderNoContact() {
-  document.getElementById('main-contact').innerHTML = `
-    <div class="waiting"><div class="big-icon">📭</div><div>Aucun contact identifié</div></div>`;
-  document.getElementById('others-section').style.display = 'none';
-}
-
-function renderMainLoading(person) {
-  document.getElementById('main-contact').innerHTML = `
-    <div class="card fade-up">
-      <div class="person-header">
-        <div class="avatar">${initials(person.name)}</div>
-        <div class="person-meta">
-          <div class="person-name">${esc(person.name)}</div>
-          <div class="person-email">${esc(person.email)}</div>
+    <!-- ── CONTACT ───────────────────────────────── -->
+    <section class="pane active" id="pane-contact" data-screen-label="Contact">
+      <div class="label">Contact principal</div>
+      <div id="main-contact">
+        <div class="waiting">
+          <div class="spinner"></div>
+          <div class="msg">En attente d'une conversation…</div>
         </div>
-        <span class="badge badge-muted">…</span>
       </div>
-      <div class="search-status" style="margin-top:10px">
-        <div class="spinner"></div><span>Recherche dans Notion…</span>
-      </div>
-    </div>`;
-}
 
-async function renderMain(person, notionData, others) {
-  const container = document.getElementById('main-contact');
-
-  if (notionData?.found) {
-    // ── Trouvé dans Notion ────────────────────────────────
-    const pageUrl = notionData.notion_page_url || notionHref(notionData.notion_page_id);
-    const origInstructions = notionData.person_instructions || '';
-    container.innerHTML = `
-      <div class="card fade-up">
-        <div class="person-header">
-          <div class="avatar">${initials(notionData.name || person.name)}</div>
-          <div class="person-meta">
-            <div class="person-name">${esc(notionData.name || person.name)}</div>
-            <div class="person-email">${esc(notionData.email || person.email)}</div>
-          </div>
-          <span class="badge badge-green">✓ Notion</span>
-        </div>
-        <div class="action-row">
-          <a href="${esc(pageUrl)}" target="_blank" class="btn btn-dark">
-            <svg width="12" height="12" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="120" height="120" rx="20" fill="white"/><path d="M28 23c0-5.5 4.5-10 10-10h44l20 20v74c0 5.5-4.5 10-10 10H38c-5.5 0-10-4.5-10-10V23z" fill="#1a1a1a"/><path d="M82 13l20 20H92c-5.5 0-10-4.5-10-10V13z" fill="#555"/></svg>
-            Ouvrir dans Notion
-          </a>
-        </div>
+      <div id="others-section" style="display:none">
         <hr class="divider">
-        <div class="field-label">📋 Instructions — personne</div>
-        <textarea id="person-instructions" rows="4" placeholder="Instructions spécifiques à ${esc(person.name)} (visible agents)…">${esc(origInstructions)}</textarea>
-        <div class="save-bar">
-          <button class="btn btn-ghost" data-action="reset-person">Annuler</button>
-          <button class="btn btn-primary" id="person-save-btn" data-action="save-person">Sauvegarder</button>
-        </div>
-      </div>`;
-
-    container.querySelector('[data-action="reset-person"]').addEventListener('click', () => resetPersonInstructions(origInstructions));
-    container.querySelector('[data-action="save-person"]').addEventListener('click', () => savePersonInstructions(notionData.notion_page_id));
-
-  } else {
-    // ── Pas dans Notion → cherche Folk ───────────────────
-    container.innerHTML = `
-      <div class="card fade-up">
-        <div class="person-header">
-          <div class="avatar">${initials(person.name)}</div>
-          <div class="person-meta">
-            <div class="person-name">${esc(person.name)}</div>
-            <div class="person-email">${esc(person.email)}</div>
-          </div>
-          <span class="badge badge-muted" id="main-badge">✗ Pas dans Notion</span>
-        </div>
-        <div class="search-status" id="folk-status">
-          <div class="spinner"></div><span>Recherche dans Folk…</span>
-        </div>
-        <div id="fallback-actions" class="action-row" style="margin-top:6px"></div>
-      </div>`;
-
-    const folkData = await lookupInFolk(person);
-    const badge    = document.getElementById('main-badge');
-    const folkSt   = document.getElementById('folk-status');
-    const actions  = document.getElementById('fallback-actions');
-    if (!badge) return;
-
-    folkSt.innerHTML = '';
-
-    if (folkData?.found) {
-      if (folkData.notion_page_id) {
-        // Folk + lien Notion existant
-        badge.className = 'badge badge-green';
-        badge.textContent = '✓ Folk + Notion';
-        actions.innerHTML = `
-          <a href="${esc(notionHref(folkData.notion_page_id))}" target="_blank" class="btn btn-dark">Ouvrir dans Notion</a>`;
-      } else {
-        // Folk trouvé, pas de page Notion
-        badge.className = 'badge badge-amber';
-        badge.textContent = 'Folk (sans fiche Notion)';
-        actions.innerHTML = `<button class="btn btn-primary" data-action="create-notion">+ Créer fiche Notion</button>`;
-        actions.querySelector('[data-action="create-notion"]').addEventListener('click', e => doCreateNotion(e, person));
-      }
-    } else {
-      // Introuvable partout
-      badge.className = 'badge badge-red';
-      badge.textContent = '✗ Non trouvé';
-      actions.innerHTML = `
-        <button class="btn btn-primary" data-action="create-notion">+ Créer dans Notion</button>
-        <a href="https://app.folk.app/contacts" target="_blank" class="btn btn-outline">+ Ouvrir Folk</a>`;
-      actions.querySelector('[data-action="create-notion"]').addEventListener('click', e => doCreateNotion(e, person));
-    }
-  }
-}
-
-/* ── Sauvegarder instructions personne ───────────────────── */
-function resetPersonInstructions(orig) {
-  const ta = document.getElementById('person-instructions');
-  if (ta) ta.value = orig;
-}
-
-async function savePersonInstructions(pageId) {
-  const ta  = document.getElementById('person-instructions');
-  const btn = document.getElementById('person-save-btn');
-  if (!ta || !btn) return;
-  btn.textContent = 'Sauvegarde…'; btn.disabled = true;
-
-  const r = await updatePersonInstructions(pageId, ta.value);
-  btn.textContent = r?.success ? '✓ Sauvegardé' : '✗ Erreur';
-  setTimeout(() => { btn.textContent = 'Sauvegarder'; btn.disabled = false; }, 2000);
-}
-
-/* ── Créer une fiche Notion ──────────────────────────────── */
-async function doCreateNotion(ev, person) {
-  const btn = ev.currentTarget;
-  btn.textContent = 'Création…'; btn.disabled = true;
-
-  const r = await createPersonInNotion(person);
-  const actions = document.getElementById('fallback-actions');
-  const badge   = document.getElementById('main-badge');
-
-  if (r?.success && actions && badge) {
-    badge.className = 'badge badge-green'; badge.textContent = '✓ Notion';
-    const url = r.notion_page_url || notionHref(r.notion_page_id);
-    actions.innerHTML = `<a href="${esc(url)}" target="_blank" class="btn btn-dark">Fiche créée — Ouvrir ↗</a>`;
-  } else {
-    btn.textContent = '✗ Erreur — Réessayer'; btn.disabled = false;
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   RENDER — AUTRES PARTICIPANTS
-   ═══════════════════════════════════════════════════════════════ */
-function renderOthers(others, convToken) {
-  const section = document.getElementById('others-section');
-  const list    = document.getElementById('others-list');
-
-  if (!others.length) { section.style.display = 'none'; return; }
-  section.style.display = 'block';
-
-  list.innerHTML = others.map((p, i) => `
-    <div class="participant" id="p-${i}">
-      <div class="p-dot" id="dot-${i}"></div>
-      <div class="p-info">
-        <div class="p-name">${esc(p.name)}</div>
-        <div class="p-email">${esc(p.email)}</div>
+        <div class="label">Autres participants</div>
+        <div id="others-list"></div>
       </div>
-      <span class="p-arrow">↗</span>
-    </div>`).join('');
+    </section>
 
-  // Lookup async pour chacun
-  others.forEach(async (p, i) => {
-    const data = await lookupParticipantInNotion(p);
-    if (convToken !== S.conversationId) return; // conversation a changé entre-temps
-    const item = document.getElementById(`p-${i}`);
-    const dot  = document.getElementById(`dot-${i}`);
-    if (!item || !dot) return;
+    <!-- ── CONVERSATION ──────────────────────────── -->
+    <section class="pane" id="pane-conv" data-screen-label="Conversation">
+      <div class="label">Instructions conversation</div>
+      <p class="intro">
+        Ces instructions sont accessibles par les agents de traitement pour contextualiser leurs actions sur cette conversation.
+      </p>
+      <textarea id="conv-textarea" rows="6" placeholder="Ex : Marc est en négociation avancée. Rester factuel, pas d'engagement tarifaire sans validation Benoît…"></textarea>
+      <div class="save-bar">
+        <button class="btn btn-ghost" onclick="resetConv()">Annuler</button>
+        <button class="btn btn-primary" id="conv-save-btn" onclick="saveConv()">Sauvegarder</button>
+      </div>
 
-    if (data?.found) {
-      dot.classList.add('found');
-      const url = data.notion_page_url || notionHref(data.notion_page_id);
-      item.onclick = () => window.open(url, '_blank');
-      item.title = `Ouvrir ${data.name || p.name} dans Notion`;
-    } else {
-      item.onclick = () => {
-        // Pas trouvé → ouvrir Folk ou proposer création
-        if (confirm(`${p.name} n'est pas dans Notion.\nOuvrir Folk pour le chercher ?`)) {
-          window.open(`https://app.folk.app/contacts`, '_blank');
-        }
+      <hr class="divider" style="margin-top:24px">
+      <div class="label">
+        <svg style="width:11px;height:11px;vertical-align:-1px;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M5 9l14 0"/><path d="M5 15l14 0"/><path d="M11 4l-4 16"/><path d="M17 4l-4 16"/></svg>
+        Missive conversation ID
+      </div>
+      <div class="conv-id" id="conv-missive-id">—</div>
+    </section>
+
+  </div><!-- /scroll -->
+
+  <!-- ═══════════════════════════════════════════════ FOOTER -->
+  <footer class="sb-footer" title="Plastic Odyssey Factories">
+    <img src="assets/pof-logo-color.svg" alt="Plastic Odyssey Factories" class="footer-logo">
+  </footer>
+
+  <!-- ═══════════════════════════════════ MOCK (preview only) ═══ -->
+  <!-- Mock activates ONLY when ?preview=1 is in the URL (standalone design review).
+       In Missive prod, the SDK script tag below loads first and provides window.Missive. -->
+  <script>
+    if (location.search.indexOf('preview=1') !== -1) {
+      window.__POF_MOCK = true;
+      window.__POF_DEMO_STATE = 'found'; // 'found' | 'folk' | 'missing' | 'loading' | 'empty'
+
+      // Mock Missive SDK
+      window.Missive = {
+        on(evt, cb) { window.__POF_MISSIVE_CB = cb; }
       };
+
+      const FIXTURES = {
+        main: { name: 'Marc Castagnet', email: 'marc.castagnet@icservices.com.hk' },
+        others: [
+          { name: 'Esther Wong',     email: 'esther.wong@icservices.com.hk' },
+          { name: 'Thibault Kheres', email: 'thibault.kheres@plasticodyssey.org' },
+          { name: 'Benoit Blancher', email: 'benoit@plasticodyssey.org' },
+        ],
+      };
+
+      window.__pofMock = function(action, args) {
+        const state = window.__POF_DEMO_STATE;
+        const main  = FIXTURES.main;
+
+        return new Promise(resolve => {
+          const delay = action.startsWith('lookup') ? 700 : 300;
+          setTimeout(() => {
+            if (action === 'lookup_person') {
+              if (state === 'found' && args.email === main.email) {
+                return resolve({
+                  found: true,
+                  name: main.name,
+                  email: main.email,
+                  notion_page_id: '4f8a2c1e9b3d4a7e8c5f6b9a2d1e0c4b',
+                  notion_page_url: 'https://notion.so/4f8a2c1e9b3d4a7e8c5f6b9a2d1e0c4b',
+                  person_instructions: 'Negotiation in progress on ICS investment (100K€). Reply factually, no pricing commitment without Benoît\'s green light. Marc is direct — keep replies short.'
+                });
+              }
+              // Random others: ~50% found
+              if (args.email !== main.email) {
+                const hit = ['thibault.kheres@plasticodyssey.org', 'benoit@plasticodyssey.org'].includes(args.email);
+                return resolve(hit
+                  ? { found: true, name: args.name, email: args.email, notion_page_id: 'aaa111bbb222ccc333' }
+                  : { found: false });
+              }
+              return resolve({ found: false });
+            }
+            if (action === 'lookup_folk') {
+              if (state === 'folk')    return resolve({ found: true });
+              if (state === 'missing') return resolve({ found: false });
+              return resolve({ found: false });
+            }
+            if (action === 'lookup_conv') {
+              return resolve({
+                instructions: 'Toujours répondre à Thibault en copie. Marc préfère le français.',
+                notion_page_id: 'conv-page-id'
+              });
+            }
+            if (action === 'upsert_conv')                 return resolve({ success: true, notion_page_id: 'conv-page-id' });
+            if (action === 'update_person_instructions')  return resolve({ success: true });
+            if (action === 'create_person') return resolve({
+              success: true,
+              notion_page_id: 'newly000created111page222',
+              notion_page_url: 'https://notion.so/newly000created111page222',
+            });
+            resolve({});
+          }, delay);
+        });
+      };
+
+      // Trigger conversation event after boot
+      window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+          if (!window.__POF_MISSIVE_CB) return;
+          const state = window.__POF_DEMO_STATE;
+          if (state === 'empty') {
+            window.__POF_MISSIVE_CB('conv-empty-001', { conversation: { messages: [{}] } });
+          } else if (state === 'loading') {
+            // do nothing -> stays in 'En attente…'
+          } else {
+            window.__POF_MISSIVE_CB('conv-demo-001', {
+              conversation: {
+                latest_message: {
+                  from_field: FIXTURES.main,
+                  to_fields:  [FIXTURES.others[0]],
+                  cc_fields:  [FIXTURES.others[1], FIXTURES.others[2]],
+                }
+              }
+            });
+          }
+        }, 50);
+      });
     }
-  });
-}
-</script>
+  </script>
+
+  <!-- Missive SDK (prod). Skipped in preview mode where the mock above
+       has already set window.Missive. -->
+  <script>
+    if (!window.__POF_MOCK) {
+      document.write('<scr' + 'ipt src="https://missiveapp.com/open/sidebar-sdk/2.0/sdk.js"></scr' + 'ipt>');
+    }
+  </script>
+
+  <!-- Sidebar logic -->
+  <script src="sidebar.js?v=2"></script>
+
 </body>
 </html>

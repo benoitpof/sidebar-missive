@@ -1,0 +1,469 @@
+/* ============================================================
+   POF Sidebar — visual layer
+   Coherent with Missive (compact), Notion (clean),
+   and POF Design System (Poppins/Raleway, navy/teal, 8px grid).
+   ============================================================ */
+
+:root {
+  /* POF tokens (subset, scoped to sidebar) */
+  --pof-navy:          #1C1F3B;
+  --pof-teal:          #80C7C2;
+  --pof-teal-dark:     #2BA595;
+  --pof-teal-deep:     #09414A;
+  --pof-coral:         #E8546C;
+  --pof-steel:         #435D74;
+  --pof-light-steel:   #5F7D95;
+  --pof-white:         #FFFFFF;
+  --pof-body-text:     #3C3C3C;
+  --pof-neutral-light: #F9FCFF;
+  --pof-neutral-mid:   #EAEBED;
+  --pof-gray-400:      #CED4DA;
+  --pof-gray-600:      #6C757D;
+  --pof-success:       #28A745;
+  --pof-warning:       #E5A100;
+  --pof-error:         #DC3545;
+
+  /* Semantic */
+  --bg:           var(--pof-white);
+  --bg-soft:      var(--pof-neutral-light);
+  --bg-tinted:    #F1F6F8;
+  --border:       var(--pof-neutral-mid);
+  --border-soft:  #F0F1F3;
+  --text:         var(--pof-navy);
+  --text-body:    var(--pof-body-text);
+  --text-muted:   var(--pof-gray-600);
+  --text-xmuted:  #9AA0A6;
+  --focus:        var(--pof-teal-dark);
+
+  /* Radii (POF) */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-pill: 100px;
+
+  /* Sizing */
+  --tab-h: 44px;
+}
+
+* , *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: "Raleway", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-body);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+button { font-family: inherit; }
+
+/* ── TABS (segmented control, Notion-style) ────────────── */
+.tabs-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  padding: 10px 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.tabs {
+  display: flex;
+  background: #F1F1EF;
+  border-radius: 7px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  font-family: "Poppins", sans-serif;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  letter-spacing: 0.01em;
+  transition: background .15s, color .15s, box-shadow .15s;
+  line-height: 1;
+}
+
+.tab svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.8;
+  flex-shrink: 0;
+}
+
+.tab:hover { color: var(--text); }
+
+.tab.active {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow:
+    0 0 0 0.5px rgba(15, 15, 15, 0.05),
+    0 1px 2px rgba(15, 15, 15, 0.08);
+}
+
+/* ── PANES ──────────────────────────────────────────────── */
+.scroll { overflow-y: auto; flex: 1; min-height: 0; }
+.pane   { display: none; padding: 16px 14px 24px; }
+.pane.active { display: block; }
+
+/* ── FOOTER (POF logo) ─────────────────────────────────── */
+.sb-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg);
+}
+
+.sb-footer .footer-logo {
+  height: 14px;
+  width: auto;
+  opacity: 0.5;
+  transition: opacity .15s;
+}
+.sb-footer:hover .footer-logo { opacity: 0.85; }
+
+.sb-footer .footer-meta {
+  font-family: "Poppins", sans-serif;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-xmuted);
+}
+
+/* ── SECTION LABEL (Notion-style small caps) ───────────── */
+.label {
+  font-family: "Poppins", sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-xmuted);
+  margin: 0 0 8px 2px;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+/* ── CARD ───────────────────────────────────────────────── */
+.card {
+  background: var(--bg-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  padding: 12px;
+}
+
+.card + .card { margin-top: 8px; }
+
+/* ── PERSON HEADER ─────────────────────────────────────── */
+.person-header { display: flex; align-items: center; gap: 10px; }
+
+.avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--pof-navy);
+  color: var(--pof-white);
+  font-family: "Poppins", sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.person-meta { flex: 1; min-width: 0; }
+
+.person-name {
+  font-family: "Poppins", sans-serif;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.person-email {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.4;
+  margin-top: 1px;
+}
+
+/* ── BADGE (Notion-style pill) ─────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: var(--r-pill);
+  font-family: "Poppins", sans-serif;
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+
+.badge svg { width: 11px; height: 11px; stroke-width: 2.2; }
+
+.badge-found {
+  background: #E6F4F2;
+  color: var(--pof-teal-deep);
+}
+.badge-folk {
+  background: #FFF4DC;
+  color: #8A6300;
+}
+.badge-missing {
+  background: #FCE6EA;
+  color: #A02333;
+}
+.badge-loading {
+  background: var(--pof-neutral-mid);
+  color: var(--text-muted);
+}
+
+/* ── BUTTONS ───────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+  font-family: "Poppins", sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background .15s, border-color .15s, color .15s;
+  text-decoration: none;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.btn svg { width: 13px; height: 13px; stroke-width: 1.8; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--pof-navy);
+  color: var(--pof-white);
+  border-color: var(--pof-navy);
+}
+.btn-primary:hover:not(:disabled) { background: #2A2E55; }
+
+.btn-outline {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn-outline:hover:not(:disabled) { border-color: var(--pof-gray-400); background: var(--bg-soft); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 6px 10px;
+}
+.btn-ghost:hover { background: var(--bg-soft); color: var(--text); }
+
+.btn-block { width: 100%; justify-content: center; }
+
+/* ── TEXTAREA ──────────────────────────────────────────── */
+textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  font-family: "Raleway", sans-serif;
+  font-size: 12.5px;
+  color: var(--text-body);
+  background: var(--bg);
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.55;
+  transition: border-color .15s, box-shadow .15s;
+}
+textarea:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(43,165,149,.15);
+}
+textarea::placeholder { color: var(--text-xmuted); }
+
+/* ── SAVE BAR ──────────────────────────────────────────── */
+.save-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+/* ── FIELD LABEL ───────────────────────────────────────── */
+.field-label {
+  font-family: "Poppins", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.field-label svg { width: 12px; height: 12px; stroke-width: 1.9; }
+
+/* ── PARTICIPANT ROW ───────────────────────────────────── */
+.participant {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 8px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background .12s;
+}
+.participant:hover { background: var(--bg-soft); }
+
+.p-avatar {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--pof-neutral-mid);
+  color: var(--pof-steel);
+  font-family: "Poppins", sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.p-status {
+  position: absolute;
+  bottom: -2px; right: -2px;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: var(--pof-gray-400);
+  border: 2px solid var(--bg);
+}
+.p-status.found   { background: var(--pof-teal-dark); }
+.p-status.missing { background: var(--pof-gray-400); }
+
+.p-info { flex: 1; min-width: 0; }
+.p-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.3;
+}
+.p-email {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.p-arrow {
+  color: var(--text-xmuted);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity .12s, transform .12s;
+}
+.participant:hover .p-arrow { opacity: 1; transform: translateX(2px); }
+.p-arrow svg { width: 14px; height: 14px; stroke-width: 1.8; }
+
+/* ── SPINNER / SKELETON ────────────────────────────────── */
+.spinner {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--pof-teal-dark);
+  animation: spin .65s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── EMPTY / WAITING ───────────────────────────────────── */
+.waiting {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 12px;
+  padding: 48px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.waiting svg { width: 28px; height: 28px; stroke-width: 1.4; color: var(--text-xmuted); }
+.waiting .msg { font-size: 12.5px; max-width: 220px; line-height: 1.5; }
+
+/* ── INLINE SEARCH STATUS ──────────────────────────────── */
+.search-status {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 10px;
+  padding: 0 2px;
+}
+
+/* ── CONV ID ───────────────────────────────────────────── */
+.conv-id {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--text-xmuted);
+  word-break: break-all;
+  padding: 8px 10px;
+  background: var(--bg-soft);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-soft);
+}
+
+/* ── INTRO TEXT ────────────────────────────────────────── */
+.intro {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  line-height: 1.55;
+}
+
+/* ── ACTION ROW ────────────────────────────────────────── */
+.action-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/* ── FADE IN (transform-only, opacity stays 1 so html-to-image
+   captures the card even if the animation hasn't progressed) ── */
+@keyframes fadeUp {
+  from { transform: translateY(4px); }
+  to   { transform: translateY(0); }
+}
+.fade-up { animation: fadeUp .2s ease forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .fade-up { animation: none; }
+}
+
+/* ── INLINE NOTION/FOLK LOGO ───────────────────────────── */
+.logo-inline { width: 12px; height: 12px; flex-shrink: 0; }
