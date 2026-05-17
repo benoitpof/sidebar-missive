@@ -39,6 +39,7 @@ const ICON = {
   tag:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7.859 6h-2.834a2.025 2.025 0 0 0 -2.025 2.025v2.834c0 .537 .213 1.052 .593 1.432l6.116 6.116a2.025 2.025 0 0 0 2.864 0l2.834 -2.834a2.025 2.025 0 0 0 0 -2.864l-6.116 -6.116a2.025 2.025 0 0 0 -1.432 -.593z"/><path d="M7.5 9.5l0 .01"/></svg>`,
   phone:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5l-2.5 1.5a11 11 0 0 0 5 5l1.5 -2.5l5 2v4a2 2 0 0 1 -2 2a16 16 0 0 1 -15 -15a2 2 0 0 1 2 -2"/></svg>`,
   whatsapp:  `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.498 14.382c-.301 -.15 -1.767 -.867 -2.04 -.966c-.273 -.101 -.473 -.15 -.673 .15c-.197 .295 -.771 .964 -.944 1.162c-.175 .195 -.348 .21 -.646 .075c-.3 -.15 -1.263 -.465 -2.403 -1.485c-.888 -.795 -1.484 -1.77 -1.66 -2.07c-.174 -.3 -.019 -.465 .13 -.615c.136 -.135 .301 -.345 .451 -.523c.146 -.181 .194 -.301 .297 -.496c.1 -.21 .049 -.375 -.025 -.524c-.075 -.15 -.672 -1.62 -.922 -2.206c-.24 -.584 -.487 -.51 -.672 -.51c-.172 -.015 -.371 -.015 -.571 -.015c-.2 0 -.523 .074 -.797 .359c-.273 .3 -1.045 1.02 -1.045 2.475c0 1.455 1.07 2.865 1.219 3.075c.149 .195 2.105 3.195 5.1 4.485c.714 .3 1.27 .48 1.704 .629c.715 .227 1.365 .195 1.88 .121c.574 -.091 1.767 -.721 2.016 -1.426c.255 -.705 .255 -1.29 .18 -1.425c-.074 -.135 -.27 -.21 -.57 -.345m-5.422 7.403h-.004a9.87 9.87 0 0 1 -5.031 -1.378l-.361 -.214l-3.741 .982l.998 -3.648l-.235 -.374a9.86 9.86 0 0 1 -1.51 -5.26c.001 -5.45 4.436 -9.884 9.888 -9.884c2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45 -4.437 9.884 -9.885 9.884m8.413 -18.297a11.815 11.815 0 0 0 -8.413 -3.488c-6.554 0 -11.89 5.335 -11.893 11.893c0 2.096 .547 4.142 1.588 5.945l-1.688 6.165l6.305 -1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89 -5.335 11.893 -11.893a11.821 11.821 0 0 0 -3.48 -8.418z"/></svg>`,
+  linkedin:  `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5C4.98 4.881 3.87 6 2.5 6S.02 4.881.02 3.5C.02 2.12 1.13 1 2.5 1s2.48 1.12 2.48 2.5zM5 8H0v16h5V8zm7.982 0H8.014v16H13v-8.4c0-4.66 6-5 6 0V24h5V13.92c0-7.88-8.922-7.593-11.018-3.71V8z"/></svg>`,
   plusCircle:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M9 12h6"/><path d="M12 9v6"/></svg>`,
   videoCam:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4z"/><path d="M3 6m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"/></svg>`,
   trash:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg>`,
@@ -222,48 +223,11 @@ async function lookupInNotion(p) {
   await ensureIndex();
   const local = lookupLocal(p);
   if (local) return local;
-  // Fallback proxy direct
+  // Fallback proxy direct (récupère les champs enrichis : meetings, tags, etc.)
   return callProxy('lookup_person', { email: p.email, name: p.name });
 }
-
-// Pour le main contact : enrichit en background (meetings + données fraîches)
-async function enrichMainAsync(p) {
-  try {
-    const r = await callProxy('lookup_person', { email: p.email, name: p.name, with_meetings: true });
-    if (!r?.found) return;
-    if (S.main !== p) return; // user a changé de conv
-    S.mainNotion = { ...(S.mainNotion || {}), ...r };
-    renderMain(S.main, S.mainNotion);
-  } catch (e) { console.warn('[POF] enrichMainAsync failed:', e); }
-}
-
-// Pour les autres participants : LOCAL UNIQUEMENT (pas de roundtrip serveur)
-async function lookupParticipantInNotion(p) {
-  await ensureIndex();
-  return lookupLocal(p) || { found: false };
-}
-
-// Folk silencieux : cache sessionStorage, pas de UI spinner bloquant
-const FOLK_CACHE_KEY = 'pof_folk_v1';
-const FOLK_TTL_MS = 30 * 60 * 1000;
-function getFolkCache() {
-  try { return JSON.parse(sessionStorage.getItem(FOLK_CACHE_KEY) || '{}'); } catch { return {}; }
-}
-function setFolkCacheItem(email, data) {
-  const c = getFolkCache();
-  c[email] = { ts: Date.now(), data };
-  try { sessionStorage.setItem(FOLK_CACHE_KEY, JSON.stringify(c)); } catch {}
-}
-async function lookupFolkSilent(p) {
-  const email = (p.email || '').toLowerCase();
-  if (!email) return { found: false };
-  const hit = getFolkCache()[email];
-  if (hit && Date.now() - hit.ts < FOLK_TTL_MS) return hit.data;
-  const r = await callProxy('lookup_folk', { email: p.email, name: p.name });
-  setFolkCacheItem(email, r);
-  return r;
-}
-const lookupInFolk                = lookupFolkSilent;
+const lookupInFolk                = p => callProxy('lookup_folk',   { email: p.email, name: p.name });
+const lookupParticipantInNotion   = p => lookupInNotion(p);
 const createPersonInNotion        = p => callProxy('create_person', { email: p.email, name: p.name });
 const updatePersonInstructions    = (pageId, text) => callProxy('update_person_instructions', { page_id: pageId, text });
 
@@ -590,7 +554,7 @@ async function renderMain(person, notionData) {
     setupContactFieldActions(notionData, person);
 
   } else {
-    // Rendu instantané "Non trouvé" — pas de spinner Folk bloquant.
+    // Rendu "Non trouvé" instantané, sans spinner Folk bloquant
     container.innerHTML = `
       <div class="card">
         <div class="person-header">
@@ -613,9 +577,9 @@ async function renderMain(person, notionData) {
     container.querySelector('[data-action="create-notion"]')
       .addEventListener('click', e => doCreateNotion(e, person));
 
-    // En arrière-plan, Folk lookup silencieux. Si trouvé → upgrade UI silencieusement.
-    lookupFolkSilent(person).then(folkData => {
-      if (S.main !== person) return; // user a changé de conv
+    // Folk silent background : upgrade UI si trouvé
+    lookupInFolk(person).then(folkData => {
+      if (S.main !== person) return;
       const badge = document.getElementById('main-badge');
       const actions = document.getElementById('fallback-actions');
       if (!badge || !folkData?.found) return;
@@ -638,7 +602,7 @@ async function renderMain(person, notionData) {
             .addEventListener('click', e => doCreateNotion(e, person));
         }
       }
-    });
+    }).catch(() => {});
   }
 }
 
@@ -852,12 +816,6 @@ async function handleConversation(id, conversation) {
   if (id !== S.conversationId) return;
   S.mainNotion = notionData;
   renderMain(S.main, notionData);
-
-  // Si trouvé en prod, enrichit en background (meetings + données fraîches).
-  // En mock, le dump_persons contient déjà tout.
-  if (notionData?.found && !window.__POF_MOCK) {
-    enrichMainAsync(S.main);
-  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -2021,7 +1979,10 @@ const TimelineState = { situation: null, upcoming: [], interactions: [] };
 const TL_TYPE_META = {
   email:    { icon: 'mail',      label: 'Email' },
   whatsapp: { icon: 'whatsapp',  label: 'WhatsApp' },
+  linkedin: { icon: 'linkedin',  label: 'LinkedIn' },
   visio:    { icon: 'videoCam',  label: 'Note de réunion' },
+  meeting:  { icon: 'videoCam',  label: 'Réunion' },
+  task:     { icon: 'taskBox',   label: 'À faire' },
   nda:      { icon: 'signature', label: 'NDA signé' },
   note:     { icon: 'notes',     label: 'Note Notion' },
   mou:      { icon: 'clipboard', label: 'MOU' },
@@ -2640,26 +2601,23 @@ function renderTimeline() {
   past.sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const renderFutureItem = (it) => {
-    const d = new Date(it.date);
-    const day = d.getDate();
-    const mon = d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '');
+    const meta = TL_TYPE_META[it.type] || (it.type === 'meeting' ? { icon: 'videoCam', label: 'Réunion' } : { icon: 'taskBox', label: 'À faire' });
+    const title = it.title || meta.label;
     const rel = formatRelDate(it.date);
     const hasTime = (it.date || '').length > 10;
+    const d = new Date(it.date);
     const time = hasTime ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
-    const today = daysUntil(d) === 0;
-    const imminent = !today && daysUntil(d) <= 3 && daysUntil(d) > 0;
-    const blockCls = ['tl-date-block', today && 'today', imminent && 'imminent'].filter(Boolean).join(' ');
-    const metaBits = [rel, time, it.meta].filter(Boolean).map(x => esc(x)).join(' <span class="tl-dot-sep">·</span> ');
+    const timeBit = time ? `${rel} · ${time}` : rel;
     return `
       <div class="tl-item future" data-type="${esc(it.type)}">
-        <div class="${blockCls}">
-          <span class="tl-date-day">${day}</span>
-          <span class="tl-date-mon">${esc(mon)}</span>
-        </div>
+        <span class="tl-node" data-type="${esc(it.type)}" title="${esc(meta.label)}">${icon(meta.icon)}</span>
         <div class="tl-body">
-          <div class="tl-title tl-title-future">${esc(it.title)}</div>
-          <div class="tl-meta tl-meta-future">${metaBits}</div>
-          ${it.url ? `<a class="tl-link tl-link-future" href="${esc(it.url)}" target="_blank" rel="noopener" title="Ouvrir">${arrowSvg}</a>` : ''}
+          <div class="tl-head">
+            <div class="tl-title">${esc(title)}</div>
+            <span class="tl-time">${esc(timeBit)}</span>
+          </div>
+          ${it.meta ? `<div class="tl-summary">${esc(it.meta)}</div>` : ''}
+          ${it.url ? `<div class="tl-meta"><a class="tl-link" href="${esc(it.url)}" target="_blank" rel="noopener" title="Ouvrir">${arrowSvg}</a></div>` : ''}
         </div>
       </div>`;
   };
@@ -2668,6 +2626,7 @@ function renderTimeline() {
     const meta = TL_TYPE_META[it.type] || { icon: 'inbox', label: it.type || '' };
     const isNote = TL_NOTE_TYPES.has(it.type);
     const defaultTitle = it.type === 'whatsapp' ? 'Message WhatsApp' :
+                         it.type === 'linkedin' ? 'Message LinkedIn' :
                          it.type === 'email'    ? 'Email' :
                          it.type === 'visio'    ? 'Note de réunion' :
                          it.type === 'note'     ? 'Note Notion' :

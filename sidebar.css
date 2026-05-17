@@ -2047,7 +2047,10 @@ textarea.is-suggested::after { content: ""; }
 
 .tl-node[data-type="email"]    { color: #3B6FB6; box-shadow: 0 0 0 1.5px #C5D8EF; background: #EAF1FB; }
 .tl-node[data-type="whatsapp"] { color: #1E9D52; box-shadow: 0 0 0 1.5px #BDE5CC; background: #E8F6EE; }
+.tl-node[data-type="linkedin"] { color: #0A66C2; box-shadow: 0 0 0 1.5px #B8D2EE; background: #E7F1F9; }
 .tl-node[data-type="visio"]    { color: var(--pof-teal-deep); box-shadow: 0 0 0 1.5px #BCDED9; background: #E6F4F2; }
+.tl-node[data-type="meeting"]  { color: var(--pof-teal-deep); box-shadow: 0 0 0 1.5px #BCDED9; background: #E6F4F2; }
+.tl-node[data-type="task"]     { color: #8A6300; box-shadow: 0 0 0 1.5px #ECD9A7; background: #FFF4DC; }
 .tl-node[data-type="nda"]      { color: var(--pof-navy); box-shadow: 0 0 0 1.5px var(--pof-gray-400); background: var(--bg-soft); }
 .tl-node[data-type="note"]     { color: var(--pof-steel); box-shadow: 0 0 0 1.5px var(--pof-neutral-mid); background: var(--bg-soft); }
 .tl-node[data-type="mou"]      { color: #A35A1F; box-shadow: 0 0 0 1.5px #ECC8A4; background: #FAEEDF; }
@@ -2155,10 +2158,8 @@ textarea.is-suggested::after { content: ""; }
 .tl-item:hover .tl-link { opacity: 0.7; }
 .tl-link:hover { opacity: 1 !important; background: var(--border); color: var(--text); }
 
-/* Future events — date-block tear-off on the left
-   - "À venir" separator uses teal accent
-   - Each future item shows a calendar-style date block (day + month)
-   - Clean body: title + single meta line (Dans X j · time · meta). */
+/* Future events — same compact row as past, with a different time tone
+   (no separate date-block). Distinguished by the "À venir" header above. */
 .tl-day-sep-future {
   color: var(--pof-teal-deep);
   font-weight: 700;
@@ -2174,88 +2175,10 @@ textarea.is-suggested::after { content: ""; }
   margin-right: 6px;
   vertical-align: 1px;
 }
-
-.tl-item.future {
-  align-items: stretch;
-}
-.tl-item.future .tl-body {
-  background: transparent;
-  border: 0;
-  padding: 2px 0 2px 2px;
-  position: relative;
-  min-width: 0;
-}
-.tl-item.future:hover .tl-body { background: transparent; }
-
-.tl-date-block {
-  flex-shrink: 0;
-  width: 38px;
-  min-height: 42px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 0 5px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md, 8px);
-  background: var(--pof-white, #fff);
-  line-height: 1;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.02);
-}
-.tl-date-block.imminent {
-  border-color: var(--pof-teal-dark);
-  background: #F1F8F7;
-}
-.tl-date-block.today {
-  border-color: var(--pof-coral);
-  background: #FCE6EA;
-}
-.tl-date-day {
-  font-family: "Poppins", sans-serif;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.02em;
-}
-.tl-date-block.imminent .tl-date-day { color: var(--pof-teal-deep); }
-.tl-date-block.today .tl-date-day { color: #A02333; }
-.tl-date-mon {
-  margin-top: 1px;
-  font-family: "Poppins", sans-serif;
-  font-size: 8.5px;
+.tl-item.future .tl-time {
+  color: var(--pof-teal-deep);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-muted);
 }
-
-.tl-title-future {
-  font-family: "Poppins", sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-  line-height: 1.3;
-  letter-spacing: -0.005em;
-  margin-bottom: 3px;
-}
-.tl-meta-future {
-  font-family: "Poppins", sans-serif;
-  font-size: 10px;
-  color: var(--text-muted);
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  line-height: 1.3;
-}
-.tl-meta-future .tl-dot-sep { color: var(--pof-gray-400); }
-.tl-link-future {
-  position: absolute;
-  top: 0;
-  right: 0;
-  opacity: 0;
-}
-.tl-item.future:hover .tl-link-future { opacity: 0.7; }
 
 .tl-empty {
   padding: 10px 4px;

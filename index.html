@@ -323,8 +323,8 @@
   </div>
 
   <!-- ═══════════════════════════════════ MOCK (preview only) ═══ -->
-  <!-- Mock activates ONLY when ?preview=1 is in the URL. En prod Missive, la SDK
-       script tag ci-dessous charge synchroniquement et fournit window.Missive. -->
+  <!-- Mock activates ONLY when ?preview=1 is in the URL. En prod Missive,
+       la SDK script tag ci-dessous charge synchroniquement et fournit window.Missive. -->
   <script>
     if (location.search.indexOf('preview=1') !== -1) {
       window.__POF_MOCK = true;
@@ -713,7 +713,9 @@
     }
   </script>
 
-  <!-- Missive SDK (prod). URL officielle integrations.missiveapp.com. -->
+  <!-- Missive SDK (prod). URL officielle integrations.missiveapp.com (l'URL
+       missiveapp.com/open/sidebar-sdk/2.0/sdk.js du handoff redirige vers
+       learn.missiveapp.com qui renvoie 404 — la SDK ne se chargerait pas). -->
   <script src="https://integrations.missiveapp.com/missive.js"></script>
 
   <!-- Si on est en mode preview, ré-applique le mock après la SDK -->
