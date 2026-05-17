@@ -476,13 +476,27 @@ function renderOthers(others, convToken) {
 /* ════════════════════════════════════════════════════════
    MISSIVE SDK ENTRY
    ════════════════════════════════════════════════════════ */
-function bootMissive() {
-  if (!window.Missive) return;
+function bootMissive(attempt = 0) {
+  if (!window.Missive) {
+    if (attempt < 10) { // retry 10x, 200ms apart = 2s total
+      setTimeout(() => bootMissive(attempt + 1), 200);
+      return;
+    }
+    console.error('[POF] Missive SDK introuvable après 2s. Vérifie le chargement de sdk.js.');
+    document.getElementById('main-contact').innerHTML = `
+      <div class="waiting">
+        ${icon('alert')}
+        <div class="msg">SDK Missive non chargée. Vérifie ta connexion et recharge Missive.</div>
+      </div>`;
+    return;
+  }
+  console.log('[POF] Missive SDK détectée, subscribe conversation event');
 
   // Pré-chargement asynchrone de l'index Personnes (fire and forget)
   ensureIndex().catch(e => console.warn('[POF] index preload failed:', e));
 
   Missive.on('conversation', async function(id, { conversation }) {
+    console.log('[POF] conversation event:', id, conversation);
     if (id === S.conversationId) return;
     S.conversationId = id;
     S.convPageId     = null;

@@ -393,16 +393,20 @@
     }
   </script>
 
-  <!-- Missive SDK (prod). Synchrone via document.write pour garantir l'ordre
-       avant sidebar.js. Skippé en mode preview standalone. -->
+  <!-- Missive SDK (prod). URL officielle integrations.missiveapp.com (l'URL
+       missiveapp.com/open/sidebar-sdk/2.0/sdk.js du handoff redirige vers
+       learn.missiveapp.com qui renvoie 404 — la SDK ne se chargeait pas). -->
+  <script src="https://integrations.missiveapp.com/missive.js"></script>
+
+  <!-- Si on est en mode preview, ré-applique le mock après la SDK -->
   <script>
-    if (!window.__POF_MOCK) {
-      document.write('<scr' + 'ipt src="https://missiveapp.com/open/sidebar-sdk/2.0/sdk.js"></scr' + 'ipt>');
+    if (window.__POF_MOCK) {
+      window.Missive = { on(evt, cb) { window.__POF_MISSIVE_CB = cb; } };
     }
   </script>
 
   <!-- Sidebar logic -->
-  <script src="sidebar.js?v=9"></script>
+  <script src="sidebar.js?v=11"></script>
 
 </body>
 </html>
