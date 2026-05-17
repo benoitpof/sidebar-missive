@@ -82,16 +82,18 @@ const S = {
 };
 
 /* ════════════════════════════════════════════════════════
-   INDEX PERSONS (cache local sessionStorage, TTL 30 min)
-   Pré-chargement de toute la base Personnes en un appel,
-   puis matching client instantané pour tous les participants.
+   INDEX PERSONS (cache local localStorage, TTL 6h)
+   Persistance entre sessions navigateur — évite le rechargement 30s
+   à chaque ouverture de Missive.
    ════════════════════════════════════════════════════════ */
-const INDEX_CACHE_KEY = 'pof_persons_v1';
-const INDEX_TTL_MS    = 30 * 60 * 1000;
+const INDEX_CACHE_KEY = 'pof_persons_v2';
+const INDEX_TTL_MS    = 6 * 60 * 60 * 1000;
+
+function _indexStore() { try { return window.localStorage; } catch { return window.sessionStorage; } }
 
 function loadIndexFromCache() {
   try {
-    const raw = sessionStorage.getItem(INDEX_CACHE_KEY);
+    const raw = _indexStore().getItem(INDEX_CACHE_KEY);
     if (!raw) return null;
     const { ts, persons } = JSON.parse(raw);
     if (!ts || Date.now() - ts > INDEX_TTL_MS) return null;
@@ -99,7 +101,7 @@ function loadIndexFromCache() {
   } catch { return null; }
 }
 function saveIndexToCache(persons) {
-  try { sessionStorage.setItem(INDEX_CACHE_KEY, JSON.stringify({ ts: Date.now(), persons })); } catch {}
+  try { _indexStore().setItem(INDEX_CACHE_KEY, JSON.stringify({ ts: Date.now(), persons })); } catch {}
 }
 function normalizeName(s) {
   return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
@@ -159,7 +161,7 @@ function lookupLocal(person) {
   };
 }
 function invalidateIndex() {
-  sessionStorage.removeItem(INDEX_CACHE_KEY);
+  _indexStore().removeItem(INDEX_CACHE_KEY);
   S.personIndex = null;
   S.indexLoading = null;
   ensureIndex().catch(() => {});
@@ -484,7 +486,7 @@ function renderMainLoading(person) {
         <span class="badge badge-loading">…</span>
       </div>
       <div class="search-status">
-        <div class="spinner"></div><span>Recherche dans Notion…</span>
+        <div class="spinner"></div><span id="main-loading-msg">${S.personIndex ? 'Recherche dans Notion…' : 'Première synchro Notion en cours (~30s)…'}</span>
       </div>
     </div>`;
 }
