@@ -42,7 +42,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.6' };       break;
+      case 'ping':                       result = { ok: true, version: '1.7' };       break;
       case 'dump_persons':               result = handleDumpPersons_(body);           break;
       case 'lookup_person':              result = handleLookupPerson_(body);          break;
       case 'create_person':              result = handleCreatePerson_(body);          break;
@@ -57,6 +57,9 @@ function doPost(e) {
       case 'add_to_watch':               result = handleAddToWatch_(body);            break;
       case 'enrich_contact':             result = handleEnrichContact_(body);         break;
       case 'brief_reply':                result = handleBriefReply_(body);            break;
+      case 'toggle_vip':                 result = handleToggleVip_(body);             break;
+      case 'add_phone_to_notion':        result = handleAddPhoneToNotion_(body);      break;
+      case 'list_proposed_tasks':        result = handleListProposedTasks_(body);     break;
       case 'estimate_opportunity':       result = handleQueueAgentTask_(body, 'estimate_opportunity'); break;
       case 'send_nda':                   result = handleQueueAgentTask_(body, 'send_nda');             break;
       case 'lookup_folk':                result = handleLookupFolk_(body);            break;
@@ -69,7 +72,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.6' });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.7' });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -225,6 +228,103 @@ function handleEnrichContact_(body) {
   var line = 'Enrichir : ' + instructions + ' (conv ' + convId.slice(0, 12) + ')';
   appendToRichText_(pageId, 'Briefing veille', line);
   return { success: true, contact_page_id: pageId };
+}
+
+/* ─── toggle_vip : ajoute/retire ⭐️ VIP du Type multi_select ─── */
+function handleToggleVip_(body) {
+  var pageId = String(body.page_id || '');
+  var nowVip = !!body.vip;
+  if (!pageId) return { success: false, error: 'page_id required' };
+
+  var page = notionFetch_('GET', '/pages/' + pageId, null);
+  var existing = (page.properties['Type'] && page.properties['Type'].multi_select) || [];
+  var names = existing.map(function (o) { return o.name; });
+  var idx = names.indexOf(VIP_TAG);
+  if (nowVip && idx === -1) names.push(VIP_TAG);
+  if (!nowVip && idx !== -1) names.splice(idx, 1);
+  notionFetch_('PATCH', '/pages/' + pageId, {
+    properties: { 'Type': { multi_select: names.map(function (n) { return { name: n }; }) } }
+  });
+  return { success: true, vip: nowVip };
+}
+
+/* ─── add_phone_to_notion : set le champ Téléphone ─── */
+function handleAddPhoneToNotion_(body) {
+  var pageId = String(body.page_id || '');
+  var phone  = String(body.phone || '').trim();
+  if (!pageId) return { success: false, error: 'page_id required' };
+  if (!phone)  return { success: false, error: 'phone required' };
+  notionFetch_('PATCH', '/pages/' + pageId, {
+    properties: { 'Téléphone': { phone_number: phone } }
+  });
+  return { success: true };
+}
+
+/* ─── list_proposed_tasks : Claude analyse, retourne 0-3 tâches actionnables ─── */
+function handleListProposedTasks_(body) {
+  var convId = String(body.conversation_id || '');
+  if (!convId) return { proposed: [] };
+
+  var subject = String(body.subject || '');
+  var mainName = (body.main && body.main.name) || '';
+  var mainEmail = (body.main && body.main.email) || '';
+  var othersList = (body.others || []).map(function (p) { return (p.name || '') + ' (' + (p.email || '') + ')'; }).join(', ');
+  var personInstr = String(body.person_instructions || '');
+  var convInstr   = String(body.conv_instructions || '');
+
+  // Pas d'éléments de contexte forts ? On retourne tableau vide sans appel IA.
+  if (!subject && !personInstr && !convInstr) {
+    return { proposed: [] };
+  }
+
+  var apiKey;
+  try { apiKey = getSecret_('ANTROPIC_API_TOKEN'); }
+  catch (_e) { return { proposed: [], error: 'no_anthropic_key' }; }
+
+  var system = 'Tu es un assistant qui analyse une conversation Missive et propose 0 à 3 tâches actionnables pour Benoit (CEO POF). ' +
+    'Retourne UNIQUEMENT un JSON valide de la forme : ' +
+    '{"proposed":[{"id":"p1","name":"...","description":"...","prio":"P0|P1|P2|P3","assignee":"ai|human","deadline":"YYYY-MM-DD"}]}. ' +
+    'Règle : ne propose une tâche QUE si quelque chose est clairement actionnable (decision en attente, deadline mentionnée, engagement à prendre, suite à donner). ' +
+    'Si rien d évident : retourne {"proposed":[]}. Pas plus de 3 tâches. P0 si urgent, P1 par défaut. assignee=human si engagement contractuel/relationnel, sinon ai.';
+
+  var today = new Date().toISOString().slice(0, 10);
+  var prompt = 'Aujourd hui : ' + today + '\n\n' +
+    'Contact principal : ' + mainName + ' (' + mainEmail + ')\n' +
+    (subject ? 'Sujet : ' + subject + '\n' : '') +
+    (othersList ? 'Autres participants : ' + othersList + '\n' : '') +
+    (personInstr ? '\nInstructions Notion sur la personne :\n' + personInstr + '\n' : '') +
+    (convInstr ? '\nInstructions Notion sur la conversation :\n' + convInstr + '\n' : '') +
+    '\nAnalyse ces éléments. Si une action concrète émerge (relance, validation, envoi, deadline imminente), propose 1-3 tâches. Sinon, retourne proposed: [].';
+
+  var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post', contentType: 'application/json',
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    payload: JSON.stringify({
+      model: ANTHROPIC_MODEL, max_tokens: 800, system: system,
+      messages: [{ role: 'user', content: prompt }]
+    }),
+    muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) return { proposed: [], error: 'anthropic_' + res.getResponseCode() };
+
+  var data = JSON.parse(res.getContentText());
+  var textBlock = (data.content || []).filter(function (b) { return b.type === 'text'; })[0];
+  var text = textBlock ? textBlock.text : '';
+  var parsed = parseJsonLoose_(text);
+  if (!parsed || !Array.isArray(parsed.proposed)) return { proposed: [] };
+
+  // Assure des IDs uniques et stables
+  var out = parsed.proposed.slice(0, 3).map(function (t, i) {
+    return {
+      id: t.id || ('p' + (i + 1)),
+      name: t.name || '(sans nom)',
+      description: t.description || '',
+      prio: t.prio || 'P2',
+      assignee: t.assignee || 'ai',
+      deadline: t.deadline || ''
+    };
+  });
+  return { proposed: out };
 }
 
 /* ─── brief_reply : append instructions à "Instruction spécifique" de la conv ─── */
@@ -576,8 +676,6 @@ function notionFetch_(method, path, body) {
  */
 function handleDumpPersons_(_body) {
   var dbId = cfg_('NOTION_PERSONS_DB');
-  var emailProp = cfg_('PERSON_EMAIL_PROP') || 'E-mail';
-  var instrProp = cfg_('PERSON_INSTRUCTIONS_PROP') || 'Instruction traitement des mails';
   if (!dbId) throw new Error('NOTION_PERSONS_DB not configured');
 
   var all = [];
@@ -590,25 +688,102 @@ function handleDumpPersons_(_body) {
     var resp = notionFetch_('POST', '/databases/' + dbId + '/query', payload);
     var results = resp.results || [];
     for (var i = 0; i < results.length; i++) {
-      var page = results[i];
-      var props = page.properties || {};
-      var title = (props['Nom'] && props['Nom'].title) || [];
-      var emailVal = (props[emailProp] && props[emailProp].email) || '';
-      var instrVal = (props[instrProp] && props[instrProp].rich_text) || [];
+      var enriched = extractPersonEnriched_(results[i], { with_meetings: false });
+      // Le cache local utilise page_id/page_url (legacy). Remap pour compat.
       all.push({
-        page_id: page.id,
-        page_url: page.url || notionPageUrl_(page.id),
-        name: richTextValue_(title),
-        email: String(emailVal || '').toLowerCase(),
-        instructions: richTextValue_(instrVal)
+        page_id:  enriched.notion_page_id,
+        page_url: enriched.notion_page_url,
+        name:     enriched.name,
+        email:    String(enriched.email || '').toLowerCase(),
+        instructions: enriched.person_instructions,
+        vip:      enriched.vip,
+        company:  enriched.company,
+        tags:     enriched.tags,
+        phone:    enriched.phone,
+        phone_source: enriched.phone_source
       });
     }
     cursor = resp.has_more ? resp.next_cursor : null;
     pageCount++;
-    if (pageCount > 50) break; // safety : max 5000 entries
+    if (pageCount > 50) break;
   } while (cursor);
 
   return { count: all.length, persons: all, ts: Date.now() };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ENRICHISSEMENT FICHE PERSONNE
+   Extrait vip, company, tags, phone depuis une page Notion.
+   Optionnellement fetch les meetings via la relation Notes.
+   ═══════════════════════════════════════════════════════════════ */
+
+const VIP_TAG = '⭐️ VIP';
+
+function extractPersonEnriched_(page, opts) {
+  opts = opts || {};
+  var props = page.properties || {};
+  var emailProp = cfg_('PERSON_EMAIL_PROP') || 'E-mail';
+  var instrProp = cfg_('PERSON_INSTRUCTIONS_PROP') || 'Instruction traitement des mails';
+  var title = (props['Nom'] && props['Nom'].title) || [];
+  var emailVal = (props[emailProp] && props[emailProp].email) || '';
+  var instrVal = (props[instrProp] && props[instrProp].rich_text) || [];
+
+  // Type (multi_select) : VIP + tags
+  var typeArr = (props['Type'] && props['Type'].multi_select) || [];
+  var typeNames = typeArr.map(function (o) { return o.name; });
+  var vip = typeNames.indexOf(VIP_TAG) !== -1;
+  // Tags = Type sans VIP (qui est rendu séparément)
+  var tags = typeNames.filter(function (n) { return n !== VIP_TAG; });
+
+  var company = (props['Société'] && props['Société'].rich_text && richTextValue_(props['Société'].rich_text)) || '';
+  var phone   = (props['Téléphone'] && props['Téléphone'].phone_number) || '';
+
+  var out = {
+    notion_page_id: page.id,
+    notion_page_url: page.url || notionPageUrl_(page.id),
+    name: richTextValue_(title),
+    email: emailVal,
+    person_instructions: richTextValue_(instrVal),
+    vip: vip,
+    company: company,
+    tags: tags,
+    phone: phone,
+    phone_source: phone ? 'notion' : 'none'
+  };
+
+  // Meetings : fetch les pages liées via la relation "Notes" (limit 5)
+  if (opts.with_meetings) {
+    var rel = (props['Notes'] && props['Notes'].relation) || [];
+    var meetings = [];
+    for (var i = 0; i < Math.min(rel.length, 5); i++) {
+      try {
+        var noteP = notionFetch_('GET', '/pages/' + rel[i].id, null);
+        var nprops = noteP.properties || {};
+        // Find title prop (any)
+        var titleStr = '';
+        var dateStr = noteP.last_edited_time || noteP.created_time || '';
+        for (var k in nprops) {
+          if (nprops[k].type === 'title') {
+            titleStr = richTextValue_(nprops[k].title || []);
+          }
+          if (nprops[k].type === 'date' && nprops[k].date && nprops[k].date.start) {
+            dateStr = nprops[k].date.start;
+          }
+        }
+        meetings.push({
+          id: noteP.id,
+          title: titleStr || '(sans titre)',
+          date: (dateStr || '').slice(0, 10),
+          url: noteP.url || notionPageUrl_(noteP.id)
+        });
+      } catch (_e) {}
+    }
+    // Sort by date desc
+    meetings.sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
+    out.meetings = meetings;
+  }
+
+  return out;
 }
 
 /* ─── Lookup person ─────────────────────────────────────────── */
@@ -618,8 +793,6 @@ function handleLookupPerson_(body) {
   var name  = String(body.name || '');
   var dbId  = cfg_('NOTION_PERSONS_DB');
   var emailProp = cfg_('PERSON_EMAIL_PROP') || 'E-mail';
-  var instrProp = cfg_('PERSON_INSTRUCTIONS_PROP') || 'Instruction traitement des mails';
-
   if (!dbId) throw new Error('NOTION_PERSONS_DB not configured');
 
   // 1) Query par email exact
@@ -631,36 +804,21 @@ function handleLookupPerson_(body) {
     });
     if (resp.results && resp.results.length) page = resp.results[0];
   }
-
   // 2) Fallback : query par nom (title contains)
   if (!page && name) {
     var resp2 = notionFetch_('POST', '/databases/' + dbId + '/query', {
-      filter: { property: 'Nom', title: { contains: name } },
-      page_size: 1
+      filter: { property: 'Nom', title: { contains: name } }, page_size: 1
     });
     if (resp2.results && resp2.results.length) page = resp2.results[0];
   }
-
   if (!page) {
-    return {
-      found: false, notion_page_id: null, notion_page_url: null,
-      name: null, email: null, person_instructions: null
-    };
+    return { found: false, notion_page_id: null, notion_page_url: null,
+             name: null, email: null, person_instructions: null };
   }
 
-  var props = page.properties || {};
-  var title = (props['Nom'] && props['Nom'].title) || [];
-  var emailVal = (props[emailProp] && props[emailProp].email) || '';
-  var instrVal = (props[instrProp] && props[instrProp].rich_text) || [];
-
-  return {
-    found: true,
-    notion_page_id: page.id,
-    notion_page_url: page.url || notionPageUrl_(page.id),
-    name: richTextValue_(title),
-    email: emailVal,
-    person_instructions: richTextValue_(instrVal)
-  };
+  var enriched = extractPersonEnriched_(page, { with_meetings: !!body.with_meetings });
+  enriched.found = true;
+  return enriched;
 }
 
 /* ─── Create person ─────────────────────────────────────────── */

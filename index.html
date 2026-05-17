@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Raleway:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="sidebar.css?v=9">
+  <link rel="stylesheet" href="sidebar.css?v=10">
 </head>
 <body>
 
@@ -38,9 +38,9 @@
     <section class="pane" id="pane-task" data-screen-label="Tâche">
 
       <div class="label">Actions rapides</div>
-      <div class="quick-actions">
+      <div class="quick-actions" id="quick-actions">
 
-        <!-- Briefing podcast -->
+        <!-- Briefing podcast (always visible) -->
         <button class="action-row-btn" data-action="brief-podcast">
           <span class="action-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M8 21l8 0"/><path d="M12 17l0 4"/></svg>
@@ -51,26 +51,7 @@
           </span>
         </button>
 
-        <!-- Ajouter à la veille -->
-        <button class="action-row-btn" data-action="add-to-watch">
-          <span class="action-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M18.364 19.364a9 9 0 1 0 -12.728 0"/><path d="M15.536 16.536a5 5 0 1 0 -7.072 0"/><path d="M12 13m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/></svg>
-          </span>
-          <span class="action-label">Ajouter à la veille</span>
-          <span class="action-arrow">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 6l6 6l-6 6"/></svg>
-          </span>
-        </button>
-        <div class="action-panel" id="watch-panel" hidden>
-          <div class="panel-hint">Choisir une catégorie :</div>
-          <div class="chips">
-            <button class="chip" data-watch="concurrents">Concurrents</button>
-            <button class="chip" data-watch="strategiques">Stratégiques</button>
-            <button class="chip" data-watch="appels-a-projets">Appels à projets</button>
-          </div>
-        </div>
-
-        <!-- Estimer l'opportunité -->
+        <!-- Estimer l'opportunité (always visible) -->
         <button class="action-row-btn" data-action="estimate-opp">
           <span class="action-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0 -10 0"/><path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/></svg>
@@ -81,91 +62,149 @@
           </span>
         </button>
 
-        <!-- Briefer une réponse -->
-        <button class="action-row-btn" data-action="brief-reply">
-          <span class="action-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M7 7h-1a2 2 0 0 0 -2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2 -2v-1"/><path d="M20.385 6.585a2.1 2.1 0 0 0 -2.97 -2.97l-8.415 8.385v3h3l8.385 -8.415z"/><path d="M16 5l3 3"/></svg>
-          </span>
-          <span class="action-label">Briefer une réponse</span>
-          <span class="action-arrow">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 6l6 6l-6 6"/></svg>
-          </span>
-        </button>
-        <div class="action-panel" id="reply-panel" hidden>
-          <div class="panel-hint">Instructions à transmettre à l'agent qui rédigera la réponse :</div>
-          <textarea id="reply-instructions" rows="4" placeholder="Ex : remercier, demander l'accord pour un appel cette semaine, ne pas s'engager sur le ticket avant validation…"></textarea>
-          <div class="save-bar">
-            <button class="btn btn-ghost" type="button" onclick="document.querySelector('[data-action=brief-reply]').click()">Annuler</button>
-            <button class="btn btn-primary" id="reply-submit" type="button">Lancer</button>
+        <!-- Collapsible group: secondary actions -->
+        <div class="actions-secondary" id="actions-secondary">
+
+          <!-- Ajouter à la veille -->
+          <button class="action-row-btn" data-action="add-to-watch">
+            <span class="action-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M18.364 19.364a9 9 0 1 0 -12.728 0"/><path d="M15.536 16.536a5 5 0 1 0 -7.072 0"/><path d="M12 13m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/></svg>
+            </span>
+            <span class="action-label">Ajouter à la veille</span>
+            <span class="action-arrow">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 6l6 6l-6 6"/></svg>
+            </span>
+          </button>
+          <div class="action-panel" id="watch-panel" hidden>
+            <div class="panel-hint">Choisir une catégorie :</div>
+            <div class="chips">
+              <button class="chip" data-watch="concurrents">Concurrents</button>
+              <button class="chip" data-watch="strategiques">Stratégiques</button>
+              <button class="chip" data-watch="appels-a-projets">Appels à projets</button>
+            </div>
           </div>
+
+          <!-- Briefer une réponse -->
+          <button class="action-row-btn" data-action="brief-reply">
+            <span class="action-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M7 7h-1a2 2 0 0 0 -2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2 -2v-1"/><path d="M20.385 6.585a2.1 2.1 0 0 0 -2.97 -2.97l-8.415 8.385v3h3l8.385 -8.415z"/><path d="M16 5l3 3"/></svg>
+            </span>
+            <span class="action-label">Briefer une réponse</span>
+            <span class="action-arrow">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 6l6 6l-6 6"/></svg>
+            </span>
+          </button>
+          <div class="action-panel" id="reply-panel" hidden>
+            <div class="panel-hint">Instructions à transmettre à l'agent qui rédigera la réponse :</div>
+            <textarea id="reply-instructions" rows="4" placeholder="Ex : remercier, demander l'accord pour un appel cette semaine, ne pas s'engager sur le ticket avant validation…"></textarea>
+            <div class="save-bar">
+              <button class="btn btn-ghost" type="button" onclick="document.querySelector('[data-action=brief-reply]').click()">Annuler</button>
+              <button class="btn btn-primary" id="reply-submit" type="button">Lancer</button>
+            </div>
+          </div>
+
+          <!-- Signer un NDA -->
+          <button class="action-row-btn" data-action="sign-nda">
+            <span class="action-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M11.46 20.846a12 12 0 0 1 -7.96 -14.846a12 12 0 0 0 8.5 -3a12 12 0 0 0 8.5 3a12 12 0 0 1 -.09 7.06"/><path d="M15 19l2 2l4 -4"/></svg>
+            </span>
+            <span class="action-label">Signer un NDA</span>
+            <span class="action-arrow">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 6l6 6l-6 6"/></svg>
+            </span>
+          </button>
+          <form class="action-panel" id="nda-panel" hidden>
+            <div class="panel-hint">Vérifier les champs pré-remplis avant envoi :</div>
+            <div class="form-field">
+              <label class="form-field-label">Signataire <span class="required-dot"></span></label>
+              <input name="signataire" type="text" value="Marc Castagnet" required>
+            </div>
+            <div class="form-field">
+              <label class="form-field-label">Email <span class="required-dot"></span></label>
+              <input name="email" type="email" value="marc.castagnet@icservices.com.hk" required>
+            </div>
+            <div class="form-field">
+              <label class="form-field-label">Société <span class="required-dot"></span></label>
+              <input name="societe" type="text" value="ICS Services Ltd." required>
+            </div>
+            <div class="form-field">
+              <label class="form-field-label">Date d'effet <span class="required-dot"></span></label>
+              <input name="date" type="date" value="2026-05-17" required>
+            </div>
+            <div class="field-error" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z"/><path d="M12 16h.01"/></svg>
+              Veuillez remplir tous les champs obligatoires.
+            </div>
+            <div class="save-bar">
+              <button class="btn btn-ghost" type="button" onclick="document.querySelector('[data-action=sign-nda]').click()">Annuler</button>
+              <button class="btn btn-primary" id="nda-submit" type="button">Envoyer le NDA</button>
+            </div>
+          </form>
+
         </div>
 
-        <!-- Signer un NDA -->
-        <button class="action-row-btn" data-action="sign-nda">
-          <span class="action-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M11.46 20.846a12 12 0 0 1 -7.96 -14.846a12 12 0 0 0 8.5 -3a12 12 0 0 0 8.5 3a12 12 0 0 1 -.09 7.06"/><path d="M15 19l2 2l4 -4"/></svg>
+        <!-- Show-more toggle (only shown when collapsed) -->
+        <button class="show-more-btn" id="actions-toggle" type="button" hidden>
+          <span class="show-more-stack">
+            <span class="stack-icon" data-color="watch">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M18.364 19.364a9 9 0 1 0 -12.728 0"/><path d="M15.536 16.536a5 5 0 1 0 -7.072 0"/><path d="M12 13m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/></svg>
+            </span>
+            <span class="stack-icon" data-color="reply">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M7 7h-1a2 2 0 0 0 -2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2 -2v-1"/><path d="M20.385 6.585a2.1 2.1 0 0 0 -2.97 -2.97l-8.415 8.385v3h3l8.385 -8.415z"/><path d="M16 5l3 3"/></svg>
+            </span>
+            <span class="stack-icon" data-color="nda">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M11.46 20.846a12 12 0 0 1 -7.96 -14.846a12 12 0 0 0 8.5 -3a12 12 0 0 0 8.5 3a12 12 0 0 1 -.09 7.06"/><path d="M15 19l2 2l4 -4"/></svg>
+            </span>
           </span>
-          <span class="action-label">Signer un NDA</span>
-          <span class="action-arrow">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 6l6 6l-6 6"/></svg>
+          <span class="show-more-text">
+            <span class="show-more-label">3 actions de plus</span>
+            <span class="show-more-sub">Veille · Réponse · NDA</span>
           </span>
+          <svg class="show-more-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M6 9l6 6l6 -6"/></svg>
         </button>
-        <form class="action-panel" id="nda-panel" hidden>
-          <div class="panel-hint">Vérifier les champs pré-remplis avant envoi :</div>
-          <div class="form-field">
-            <label class="form-field-label">Signataire <span class="required-dot"></span></label>
-            <input name="signataire" type="text" required>
-          </div>
-          <div class="form-field">
-            <label class="form-field-label">Email <span class="required-dot"></span></label>
-            <input name="email" type="email" required>
-          </div>
-          <div class="form-field">
-            <label class="form-field-label">Société <span class="required-dot"></span></label>
-            <input name="societe" type="text" required>
-          </div>
-          <div class="form-field">
-            <label class="form-field-label">Date d'effet <span class="required-dot"></span></label>
-            <input name="date" type="date" required>
-          </div>
-          <div class="field-error" hidden>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z"/><path d="M12 16h.01"/></svg>
-            Veuillez remplir tous les champs obligatoires.
-          </div>
-          <div class="save-bar">
-            <button class="btn btn-ghost" type="button" onclick="document.querySelector('[data-action=sign-nda]').click()">Annuler</button>
-            <button class="btn btn-primary" id="nda-submit" type="button">Envoyer le NDA</button>
-          </div>
-        </form>
 
       </div>
 
       <hr class="divider">
 
-      <!-- Tâches liées (existantes) -->
-      <div class="label">Tâches liées (<span id="task-count">0</span>)</div>
-      <div class="task-list" id="task-list">
+      <!-- Tâches proposées (pré-remplies depuis la conversation) -->
+      <div class="label label-with-hint">
+        <span class="label-with-icon">
+          <svg class="ai-wand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9">
+            <path d="M6 21l15 -15l-3 -3l-15 15l3 3"/>
+            <path d="M15 6l3 3"/>
+            <path d="M9 3a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/>
+            <path d="M19 13a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/>
+          </svg>
+          Tâches proposées (<span id="proposed-count">0</span>)
+        </span>
+      </div>
+      <div class="proposed-list" id="proposed-list">
         <!-- populated by JS -->
       </div>
 
       <hr class="divider">
 
-      <!-- Nouvelle tâche -->
-      <div class="label">Nouvelle tâche</div>
+      <!-- Bouton Nouvelle tâche (manuelle) -->
+      <button class="action-row-btn ghost-action open" id="new-task-toggle">
+        <span class="action-icon action-icon-ghost">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M12 5l0 14"/><path d="M5 12l14 0"/></svg>
+        </span>
+        <span class="action-label">Créer une tâche personnalisée</span>
+        <span class="action-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M9 6l6 6l-6 6"/></svg>
+        </span>
+      </button>
       <div class="task-form" id="new-task-form">
-        <div class="prefilled-hint">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/></svg>
-          Pré-rempli depuis la conversation
-        </div>
 
         <div class="form-field">
           <label class="form-field-label">Nom</label>
-          <input name="name" type="text" id="task-name" placeholder="Action courte, ex : Répondre à X sur Y">
+          <input name="name" type="text" id="task-name" placeholder="Ex : Relancer Marc sur le term-sheet…">
         </div>
 
         <div class="form-field">
           <label class="form-field-label">Description</label>
-          <textarea id="task-desc" rows="3" placeholder="Contexte + recommandation tactique"></textarea>
+          <textarea id="task-desc" rows="3" placeholder="Détails utiles pour l'agent ou la personne en charge…"></textarea>
         </div>
 
         <div class="form-row">
@@ -203,22 +242,34 @@
           Créer la tâche
         </button>
       </div>
+
+      <hr class="divider">
+
+      <!-- Tâches liées (existantes) -->
+      <div class="label">Tâches liées (<span id="task-count">0</span>)</div>
+      <div class="task-list" id="task-list">
+        <!-- populated by JS -->
+      </div>
     </section>
 
     <!-- ── CONTACT ───────────────────────────────── -->
     <section class="pane active" id="pane-contact" data-screen-label="Contact">
-      <div class="label">Contact principal</div>
-      <div id="main-contact">
-        <div class="waiting">
-          <div class="spinner"></div>
-          <div class="msg">En attente d'une conversation…</div>
+      <div class="contact-grid">
+        <div class="contact-main">
+          <div class="label">Contact principal</div>
+          <div id="main-contact">
+            <div class="waiting">
+              <div class="spinner"></div>
+              <div class="msg">En attente d'une conversation…</div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div id="others-section" style="display:none">
-        <hr class="divider">
-        <div class="label">Autres participants</div>
-        <div id="others-list"></div>
+        <aside class="contact-aside" id="others-section" style="display:none">
+          <hr class="divider">
+          <div class="label">Autres participants</div>
+          <div id="others-list"></div>
+        </aside>
       </div>
     </section>
 
@@ -286,15 +337,62 @@
                   email: main.email,
                   notion_page_id: '4f8a2c1e9b3d4a7e8c5f6b9a2d1e0c4b',
                   notion_page_url: 'https://notion.so/4f8a2c1e9b3d4a7e8c5f6b9a2d1e0c4b',
-                  person_instructions: 'Negotiation in progress on ICS investment (100K€). Reply factually, no pricing commitment without Benoît\'s green light. Marc is direct — keep replies short.'
+                  person_instructions: 'Negotiation in progress on ICS investment (100K€). Reply factually, no pricing commitment without Benoît\'s green light. Marc is direct — keep replies short.',
+                  vip: true,
+                  company: 'ICS Services Ltd.',
+                  tags: ['Investisseur', 'Hong Kong', 'Capital', 'Board'],
+                  phone: '+852 9876 5432',
+                  phone_source: 'notion',
+                  meetings: [
+                    { id: 'm1', title: 'Pitch capital ICS', date: '2026-04-22', url: 'https://notion.so/meet-m1' },
+                    { id: 'm2', title: 'Suivi term-sheet', date: '2026-03-18', url: 'https://notion.so/meet-m2' },
+                    { id: 'm3', title: 'Intro Esther Wong', date: '2026-02-05', url: 'https://notion.so/meet-m3' },
+                    { id: 'm4', title: 'Tour de table HK', date: '2026-01-14', url: 'https://notion.so/meet-m4' },
+                    { id: 'm5', title: 'Premier contact', date: '2025-11-09', url: 'https://notion.so/meet-m5' },
+                  ],
                 });
               }
               // Random others: ~50% found
               if (args.email !== main.email) {
-                const hit = ['thibault.kheres@plasticodyssey.org', 'benoit@plasticodyssey.org'].includes(args.email);
-                return resolve(hit
-                  ? { found: true, name: args.name, email: args.email, notion_page_id: 'aaa111bbb222ccc333' }
-                  : { found: false });
+                const isPofTeam = ['thibault.kheres@plasticodyssey.org', 'benoit@plasticodyssey.org'].includes(args.email);
+                const isEsther  = args.email === 'esther.wong@icservices.com.hk';
+                if (isPofTeam) {
+                  return resolve({
+                    found: true,
+                    name: args.name,
+                    email: args.email,
+                    notion_page_id: 'aaa111bbb222ccc333',
+                    notion_page_url: 'https://notion.so/aaa111bbb222ccc333',
+                    vip: args.email === 'benoit@plasticodyssey.org',
+                    company: 'Plastic Odyssey',
+                    tags: ['Équipe interne', args.email === 'benoit@plasticodyssey.org' ? 'CEO' : 'CTO'],
+                    phone: '+33 6 12 34 56 78',
+                    phone_source: 'notion',
+                    meetings: [
+                      { id: 'mt1', title: 'Stand-up hebdo équipe', date: '2026-05-12', url: 'https://notion.so/mt-1' },
+                      { id: 'mt2', title: 'Revue OKR Q2', date: '2026-04-30', url: 'https://notion.so/mt-2' },
+                    ],
+                  });
+                }
+                if (isEsther) {
+                  // Esther exists in Notion mais sans numéro ; on simule la détection IA dans signature
+                  return resolve({
+                    found: true,
+                    name: args.name,
+                    email: args.email,
+                    notion_page_id: 'esther000abc111def',
+                    notion_page_url: 'https://notion.so/esther000abc111def',
+                    vip: false,
+                    company: 'ICS Services Ltd.',
+                    tags: ['Operations', 'Hong Kong'],
+                    phone: '+852 6789 4521',
+                    phone_source: 'email_signature',
+                    meetings: [
+                      { id: 'ew1', title: 'Coordination board ICS', date: '2026-04-22', url: 'https://notion.so/ew-1' },
+                    ],
+                  });
+                }
+                return resolve({ found: false });
               }
               return resolve({ found: false });
             }
@@ -305,7 +403,8 @@
             }
             if (action === 'lookup_conv') {
               return resolve({
-                instructions: 'Toujours répondre à Thibault en copie. Marc préfère le français.',
+                instructions: 'Marc est en négociation avancée sur entrée au capital ICS (100K€). Rester factuel, ne pas s\'engager sur la valorisation sans Benoît. Réponses courtes.',
+                suggested: true,
                 notion_page_id: 'conv-page-id'
               });
             }
@@ -363,6 +462,72 @@
               });
             }
             if (action === 'toggle_task') return resolve({ success: true });
+            if (action === 'toggle_vip')  return resolve({ success: true });
+            if (action === 'add_phone_to_notion') return resolve({ success: true });
+            if (action === 'dump_persons') {
+              // Mock : retourne les 4 fixtures + un Marc enrichi pour tester l'index local
+              return resolve({
+                persons: [
+                  { email: 'marc.castagnet@icservices.com.hk', name: 'Marc Castagnet',
+                    page_id: '4f8a2c1e9b3d4a7e8c5f6b9a2d1e0c4b',
+                    page_url: 'https://notion.so/4f8a2c1e9b3d4a7e8c5f6b9a2d1e0c4b',
+                    instructions: 'Negotiation in progress on ICS investment (100K€). Reply factually, no pricing commitment without Benoît\'s green light. Marc is direct — keep replies short.',
+                    vip: true, company: 'ICS Services Ltd.',
+                    tags: ['Investisseur', 'Hong Kong', 'Capital', 'Board'],
+                    phone: '+852 9876 5432', phone_source: 'notion',
+                    meetings: [
+                      { id: 'm1', title: 'Pitch capital ICS', date: '2026-04-22', url: 'https://notion.so/meet-m1' },
+                      { id: 'm2', title: 'Suivi term-sheet',   date: '2026-03-18', url: 'https://notion.so/meet-m2' },
+                      { id: 'm3', title: 'Intro Esther Wong',  date: '2026-02-05', url: 'https://notion.so/meet-m3' },
+                    ]
+                  },
+                  { email: 'thibault.kheres@plasticodyssey.org', name: 'Thibault Kheres',
+                    page_id: 'aaa111bbb222ccc333', page_url: 'https://notion.so/aaa111bbb222ccc333',
+                    company: 'Plastic Odyssey', tags: ['Équipe interne', 'CTO']
+                  },
+                  { email: 'benoit@plasticodyssey.org', name: 'Benoit Blancher',
+                    page_id: 'aaa222ccc333ddd444', page_url: 'https://notion.so/aaa222ccc333ddd444',
+                    vip: true, company: 'Plastic Odyssey', tags: ['Équipe interne', 'CEO']
+                  },
+                  { email: 'esther.wong@icservices.com.hk', name: 'Esther Wong',
+                    page_id: 'esther000abc111def', page_url: 'https://notion.so/esther000abc111def',
+                    company: 'ICS Services Ltd.', tags: ['Operations', 'Hong Kong'],
+                    phone: '+852 6789 4521', phone_source: 'email_signature',
+                    meetings: [{ id: 'ew1', title: 'Coordination board ICS', date: '2026-04-22', url: 'https://notion.so/ew-1' }]
+                  },
+                ]
+              });
+            }
+            if (action === 'list_proposed_tasks') {
+              return resolve({
+                proposed: [
+                  {
+                    id: 'p1',
+                    name: 'Confirmer participation ICS — répondre à Marc',
+                    description: 'Confirmer accord de principe sur entrée au capital à 100K€, proposer un appel cette semaine. Ne pas s\'engager sur la valorisation.',
+                    prio: 'P1',
+                    assignee: 'ai',
+                    deadline: '2026-05-20',
+                  },
+                  {
+                    id: 'p2',
+                    name: 'Vérifier capacité juridique entrée capital HK',
+                    description: 'Demander à Maître Renard si ICS Services Ltd. (Hong Kong) peut entrer au capital sans audit préalable côté FR.',
+                    prio: 'P2',
+                    assignee: 'human',
+                    deadline: '2026-05-22',
+                  },
+                  {
+                    id: 'p3',
+                    name: 'Envoyer pitch deck v3 à Esther Wong en copie',
+                    description: 'Esther a explicitement demandé le deck mis à jour pendant le board call.',
+                    prio: 'P2',
+                    assignee: 'ai',
+                    deadline: '2026-05-19',
+                  },
+                ]
+              });
+            }
             resolve({});
           }, delay);
         });
@@ -393,9 +558,7 @@
     }
   </script>
 
-  <!-- Missive SDK (prod). URL officielle integrations.missiveapp.com (l'URL
-       missiveapp.com/open/sidebar-sdk/2.0/sdk.js du handoff redirige vers
-       learn.missiveapp.com qui renvoie 404 — la SDK ne se chargeait pas). -->
+  <!-- Missive SDK (prod). URL officielle integrations.missiveapp.com. -->
   <script src="https://integrations.missiveapp.com/missive.js"></script>
 
   <!-- Si on est en mode preview, ré-applique le mock après la SDK -->
@@ -406,7 +569,7 @@
   </script>
 
   <!-- Sidebar logic -->
-  <script src="sidebar.js?v=14"></script>
+  <script src="sidebar.js?v=15"></script>
 
 </body>
 </html>

@@ -17,6 +17,7 @@ const ICON = {
   inbox:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h3l3 3h4l3 -3h3"/><path d="M4 4h16v16h-16z"/></svg>`,
   clipboard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2"/><path d="M9 3m0 2a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2z"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>`,
   notes:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>`,
+  aiNotes:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-9"/><path d="M11 9l5 0"/><path d="M11 13l5 0"/><path d="M11 17l3 0"/><path d="M5 6l1.2 -.4l.4 -1.2l.4 1.2l1.2 .4l-1.2 .4l-.4 1.2l-.4 -1.2z" fill="currentColor"/></svg>`,
   hash:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l14 0"/><path d="M5 15l14 0"/><path d="M11 4l-4 16"/><path d="M17 4l-4 16"/></svg>`,
   microphone:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M8 21l8 0"/><path d="M12 17l0 4"/></svg>`,
   radar:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18.364 19.364a9 9 0 1 0 -12.728 0"/><path d="M15.536 16.536a5 5 0 1 0 -7.072 0"/><path d="M12 13m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/></svg>`,
@@ -32,6 +33,16 @@ const ICON = {
   sparkles:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/></svg>`,
   chevron:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6l-6 6"/></svg>`,
   notion: `<svg class="logo-inline" viewBox="0 0 120 126" xmlns="http://www.w3.org/2000/svg"><path d="M24 8l68-5c8-1 11 4 11 12v89c0 7-3 11-10 12l-66 4c-7 0-11-3-15-9L4 96c-4-5-5-9-5-13V25c0-7 3-13 12-14L24 8z" fill="currentColor"/></svg>`,
+  star:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873z"/></svg>`,
+  starFill:  `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4"><path d="M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873z"/></svg>`,
+  building:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l18 0"/><path d="M9 8l1 0"/><path d="M9 12l1 0"/><path d="M9 16l1 0"/><path d="M14 8l1 0"/><path d="M14 12l1 0"/><path d="M14 16l1 0"/><path d="M5 21v-16a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v16"/></svg>`,
+  tag:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7.859 6h-2.834a2.025 2.025 0 0 0 -2.025 2.025v2.834c0 .537 .213 1.052 .593 1.432l6.116 6.116a2.025 2.025 0 0 0 2.864 0l2.834 -2.834a2.025 2.025 0 0 0 0 -2.864l-6.116 -6.116a2.025 2.025 0 0 0 -1.432 -.593z"/><path d="M7.5 9.5l0 .01"/></svg>`,
+  phone:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5l-2.5 1.5a11 11 0 0 0 5 5l1.5 -2.5l5 2v4a2 2 0 0 1 -2 2a16 16 0 0 1 -15 -15a2 2 0 0 1 2 -2"/></svg>`,
+  whatsapp:  `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.498 14.382c-.301 -.15 -1.767 -.867 -2.04 -.966c-.273 -.101 -.473 -.15 -.673 .15c-.197 .295 -.771 .964 -.944 1.162c-.175 .195 -.348 .21 -.646 .075c-.3 -.15 -1.263 -.465 -2.403 -1.485c-.888 -.795 -1.484 -1.77 -1.66 -2.07c-.174 -.3 -.019 -.465 .13 -.615c.136 -.135 .301 -.345 .451 -.523c.146 -.181 .194 -.301 .297 -.496c.1 -.21 .049 -.375 -.025 -.524c-.075 -.15 -.672 -1.62 -.922 -2.206c-.24 -.584 -.487 -.51 -.672 -.51c-.172 -.015 -.371 -.015 -.571 -.015c-.2 0 -.523 .074 -.797 .359c-.273 .3 -1.045 1.02 -1.045 2.475c0 1.455 1.07 2.865 1.219 3.075c.149 .195 2.105 3.195 5.1 4.485c.714 .3 1.27 .48 1.704 .629c.715 .227 1.365 .195 1.88 .121c.574 -.091 1.767 -.721 2.016 -1.426c.255 -.705 .255 -1.29 .18 -1.425c-.074 -.135 -.27 -.21 -.57 -.345m-5.422 7.403h-.004a9.87 9.87 0 0 1 -5.031 -1.378l-.361 -.214l-3.741 .982l.998 -3.648l-.235 -.374a9.86 9.86 0 0 1 -1.51 -5.26c.001 -5.45 4.436 -9.884 9.888 -9.884c2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45 -4.437 9.884 -9.885 9.884m8.413 -18.297a11.815 11.815 0 0 0 -8.413 -3.488c-6.554 0 -11.89 5.335 -11.893 11.893c0 2.096 .547 4.142 1.588 5.945l-1.688 6.165l6.305 -1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89 -5.335 11.893 -11.893a11.821 11.821 0 0 0 -3.48 -8.418z"/></svg>`,
+  plusCircle:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M9 12h6"/><path d="M12 9v6"/></svg>`,
+  videoCam:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4z"/><path d="M3 6m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"/></svg>`,
+  trash:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg>`,
+  wand:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21l15 -15l-3 -3l-15 15l3 3"/><path d="M15 6l3 3"/><path d="M9 3a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/><path d="M19 13a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/></svg>`,
 };
 
 function icon(name) { return ICON[name] || ''; }
@@ -55,6 +66,7 @@ const S = {
   mainNotion:     null,  // dernier résultat lookup_person pour S.main
   convPageId:     null,
   convOrigText:   '',
+  convSuggested:  false,
   convSubject:    '',
   personIndex:    null,
   indexLoading:   null,
@@ -81,12 +93,11 @@ function saveIndexToCache(persons) {
   try { sessionStorage.setItem(INDEX_CACHE_KEY, JSON.stringify({ ts: Date.now(), persons })); } catch {}
 }
 function normalizeName(s) {
-  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
 }
-
 function buildIndex(persons) {
   const idx = new Map();        // email -> person
-  const nameIdx = new Map();    // normalized name -> person (pour fallback)
+  const nameIdx = new Map();    // normalized name -> person (fallback)
   for (const p of persons) {
     if (p.email) idx.set(p.email.toLowerCase().trim(), p);
     if (p.name)  nameIdx.set(normalizeName(p.name), p);
@@ -113,7 +124,7 @@ function lookupLocal(person) {
   if (!S.personIndex) return null;
   const email = (person.email || '').toLowerCase().trim();
   let hit = email ? S.personIndex.get(email) : null;
-  // Fallback : matching par nom normalisé (sans accents, casse-insensible)
+  // Fallback : matching par nom normalisé
   if (!hit && person.name && S.personIndex._byName) {
     hit = S.personIndex._byName.get(normalizeName(person.name));
   }
@@ -125,7 +136,14 @@ function lookupLocal(person) {
     name:            hit.name || person.name,
     email:           hit.email || person.email,
     person_instructions: hit.instructions || '',
-    matched_by:      email && S.personIndex.get(email) ? 'email' : 'name'
+    // Champs enrichis (préservés s'ils existent dans le dump)
+    vip:        hit.vip || false,
+    company:    hit.company || '',
+    tags:       hit.tags || [],
+    phone:      hit.phone || '',
+    phone_source: hit.phone_source || (hit.phone ? 'notion' : 'none'),
+    meetings:   hit.meetings || [],
+    matched_by: email && S.personIndex.get(email) ? 'email' : 'name',
   };
 }
 function invalidateIndex() {
@@ -160,6 +178,14 @@ function notionHref(pageId) {
   return `https://notion.so/${(pageId || '').replace(/-/g, '')}`;
 }
 
+/* Unified "linked to Notion" pill — small grey badge with Notion logo + label.
+   Use wherever an object opens its corresponding Notion page so sync state
+   reads the same way across the whole sidebar. */
+function notionPill(href, { label = 'Notion', title = 'Ouvrir dans Notion' } = {}) {
+  const arrow = `<svg class="pill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>`;
+  return `<a class="notion-pill" href="${esc(href || '#')}" target="_blank" rel="noopener" title="${esc(title)}" aria-label="${esc(title)}">${icon('notion')}<span>${esc(label)}</span>${arrow}</a>`;
+}
+
 /* ════════════════════════════════════════════════════════
    PROXY
    ════════════════════════════════════════════════════════ */
@@ -179,15 +205,55 @@ async function callProxy(action, args = {}) {
   }
 }
 
-// Lookup local-first : utilise l'index cache. Fallback proxy uniquement
-// si l'index n'est pas encore chargé OU si pas trouvé localement.
+// Lookup local-first : utilise l'index cache. Fallback proxy si pas trouvé.
 async function lookupInNotion(p) {
   await ensureIndex();
   const local = lookupLocal(p);
-  return local || { found: false };
+  if (local) return local;
+  // Fallback proxy : tente une recherche serveur (email + nom)
+  return callProxy('lookup_person', { email: p.email, name: p.name });
 }
-const lookupInFolk                = p => callProxy('lookup_folk',   { email: p.email, name: p.name });
-const lookupParticipantInNotion   = p => lookupInNotion(p);
+
+// Pour le main contact : lance en parallèle un enrichissement (meetings)
+// qui re-render quand prêt. Retourne le local match instant.
+async function enrichMainAsync(p) {
+  try {
+    const r = await callProxy('lookup_person', { email: p.email, name: p.name, with_meetings: true });
+    if (!r?.found) return;
+    if (S.main !== p) return; // user a changé de conv entre-temps
+    S.mainNotion = { ...(S.mainNotion || {}), ...r };
+    renderMain(S.main, S.mainNotion);
+  } catch (e) { console.warn('[POF] enrichMainAsync failed:', e); }
+}
+
+// Lookup pour les participants secondaires : LOCAL UNIQUEMENT.
+// Pas de roundtrip serveur pour éviter d'attendre N×5s sur tous les autres.
+async function lookupParticipantInNotion(p) {
+  await ensureIndex();
+  return lookupLocal(p) || { found: false };
+}
+
+// Folk silent : cache sessionStorage par email, pas de UI spinner.
+const FOLK_CACHE_KEY = 'pof_folk_v1';
+const FOLK_TTL_MS = 30 * 60 * 1000;
+function getFolkCache() {
+  try { return JSON.parse(sessionStorage.getItem(FOLK_CACHE_KEY) || '{}'); } catch { return {}; }
+}
+function setFolkCache(email, data) {
+  const c = getFolkCache();
+  c[email] = { ts: Date.now(), data };
+  try { sessionStorage.setItem(FOLK_CACHE_KEY, JSON.stringify(c)); } catch {}
+}
+async function lookupFolkSilent(p) {
+  const email = (p.email || '').toLowerCase();
+  if (!email) return { found: false };
+  const hit = getFolkCache()[email];
+  if (hit && Date.now() - hit.ts < FOLK_TTL_MS) return hit.data;
+  const r = await callProxy('lookup_folk', { email: p.email, name: p.name });
+  setFolkCache(email, r);
+  return r;
+}
+const lookupInFolk                = lookupFolkSilent;
 const createPersonInNotion        = p => callProxy('create_person', { email: p.email, name: p.name });
 const updatePersonInstructions    = (pageId, text) => callProxy('update_person_instructions', { page_id: pageId, text });
 
@@ -215,7 +281,7 @@ function extractParticipants(conv) {
     add(msg.cc_fields);
     add(msg.bcc_fields);
   }
-  // Shape 2 : conversation.users (Missive SDK officiel : tableau d'users)
+  // Shape 2 : conversation.users (Missive SDK officiel)
   if (Array.isArray(conv.users)) conv.users.forEach(add);
   // Shape 3 : conversation.contacts
   if (Array.isArray(conv.contacts)) conv.contacts.forEach(add);
@@ -265,9 +331,13 @@ async function promoteParticipant(idx) {
 async function loadConvInstructions(convId) {
   const data = await callProxy('lookup_conv', { missive_conversation_id: convId });
   const instructions = data?.instructions || '';
-  S.convPageId   = data?.notion_page_id || null;
-  S.convOrigText = instructions;
-  document.getElementById('conv-textarea').value = instructions;
+  const suggested    = !!data?.suggested;
+  S.convPageId    = data?.notion_page_id || null;
+  S.convOrigText  = instructions;
+  S.convSuggested = suggested;
+  const ta = document.getElementById('conv-textarea');
+  ta.value = instructions;
+  ta.classList.toggle('is-suggested', suggested && !!instructions);
 }
 
 function saveConv() {
@@ -280,9 +350,12 @@ function saveConv() {
     return;
   }
 
-  // Feedback immédiat : "Sauvegardé" sans attendre le serveur
-  S.convOrigText = text;
+  // Feedback immédiat — pas d'attente serveur
+  S.convOrigText  = text;
+  S.convSuggested = false;
+  document.getElementById('conv-textarea').classList.remove('is-suggested');
   btn.innerHTML  = `${icon('check')} Sauvegardé`;
+  btn.disabled = true;
   setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; }, 2000);
 
   // Sync en arrière-plan
@@ -296,11 +369,13 @@ function saveConv() {
       console.warn('[POF] upsert_conv failed:', r);
       toast(r?.error || 'Échec sauvegarde conv', 'error');
     }
-  }).catch(e => toast('Erreur réseau', 'error'));
+  }).catch(() => toast('Erreur réseau', 'error'));
 }
 
 function resetConv() {
-  document.getElementById('conv-textarea').value = S.convOrigText;
+  const ta = document.getElementById('conv-textarea');
+  ta.value = S.convOrigText;
+  ta.classList.toggle('is-suggested', !!S.convSuggested && !!S.convOrigText);
 }
 
 /* ════════════════════════════════════════════════════════
@@ -338,6 +413,7 @@ async function renderMain(person, notionData) {
   if (notionData?.found) {
     const pageUrl          = notionData.notion_page_url || notionHref(notionData.notion_page_id);
     const origInstructions = notionData.person_instructions || '';
+    const isVip            = !!notionData.vip;
 
     container.innerHTML = `
       <div class="card">
@@ -347,16 +423,25 @@ async function renderMain(person, notionData) {
             <div class="person-name">${esc(notionData.name || person.name)}</div>
             <div class="person-email">${esc(notionData.email || person.email)}</div>
           </div>
-          <a href="${esc(pageUrl)}" target="_blank" class="badge badge-found" title="Ouvrir dans Notion">
-            ${icon('check')} Notion
-            <svg class="badge-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>
-          </a>
+          <div class="person-header-right">
+            <button class="vip-star ${isVip ? 'is-vip' : ''}" id="vip-toggle"
+                    title="${isVip ? 'Retirer du statut VIP' : 'Marquer comme VIP'}"
+                    aria-pressed="${isVip ? 'true' : 'false'}">
+              ${isVip ? icon('starFill') : icon('star')}
+            </button>
+            <a href="${esc(pageUrl)}" target="_blank" class="badge badge-found" title="Ouvrir dans Notion">
+              ${icon('check')} Notion
+              <svg class="badge-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>
+            </a>
+          </div>
         </div>
 
-        <button class="action-row-btn" id="enrich-toggle" style="margin-top:4px">
+        ${renderContactFields(notionData, person)}
+
+        <button class="action-row-btn" id="enrich-toggle" style="margin-top:10px">
           <span class="action-icon">${icon('sparkles')}</span>
           <span class="action-label">Enrichir le contact</span>
-          <span class="action-arrow">${icon('chevron')}</span>
+          <span class="action-arrow action-arrow-gen" title="Génère des informations">${icon('wand')}</span>
         </button>
         <div class="action-panel" id="enrich-panel" hidden>
           <div class="panel-hint">Que cherche-t-on ? (rôle exact, mandats, intérêts publics, contexte sociétaire…)</div>
@@ -384,8 +469,11 @@ async function renderMain(person, notionData) {
       .addEventListener('click', () => savePersonInstructions(notionData.notion_page_id));
 
     setupEnrichContact();
+    setupVipToggle(notionData.notion_page_id);
+    setupContactFieldActions(notionData, person);
 
   } else {
+    // Rendu instantané "Non trouvé" — pas de spinner Folk bloquant.
     container.innerHTML = `
       <div class="card">
         <div class="person-header">
@@ -394,7 +482,7 @@ async function renderMain(person, notionData) {
             <div class="person-name">${esc(person.name)}</div>
             <div class="person-email">${esc(person.email)}</div>
           </div>
-          <span class="badge badge-missing">${icon('x')} Non trouvé</span>
+          <span class="badge badge-missing" id="main-badge">${icon('x')} Non trouvé</span>
         </div>
         <div id="fallback-actions" class="action-row">
           <button class="btn btn-primary" data-action="create-notion">
@@ -405,9 +493,36 @@ async function renderMain(person, notionData) {
           </a>
         </div>
       </div>`;
-
     container.querySelector('[data-action="create-notion"]')
       .addEventListener('click', e => doCreateNotion(e, person));
+
+    // En arrière-plan, Folk lookup silencieux. Si trouvé → upgrade UI.
+    lookupFolkSilent(person).then(folkData => {
+      if (S.main !== person) return; // user a changé de conv
+      const badge = document.getElementById('main-badge');
+      const actions = document.getElementById('fallback-actions');
+      if (!badge || !folkData?.found) return;
+
+      if (folkData.notion_page_id) {
+        badge.outerHTML = `
+          <a href="${esc(notionHref(folkData.notion_page_id))}" target="_blank" class="badge badge-found" title="Ouvrir dans Notion">
+            ${icon('check')} Folk + Notion
+            <svg class="badge-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>
+          </a>`;
+        if (actions) actions.remove();
+      } else {
+        badge.className = 'badge badge-folk';
+        badge.innerHTML = `${icon('alert')} Folk uniquement`;
+        if (actions) {
+          actions.innerHTML = `
+            <button class="btn btn-primary btn-block" data-action="create-notion">
+              ${icon('plus')} Créer la fiche Notion
+            </button>`;
+          actions.querySelector('[data-action="create-notion"]')
+            .addEventListener('click', e => doCreateNotion(e, person));
+        }
+      }
+    });
   }
 }
 
@@ -423,6 +538,7 @@ function savePersonInstructions(pageId) {
   const text = ta.value;
   // Feedback immédiat
   btn.innerHTML = `${icon('check')} Sauvegardé`;
+  btn.disabled = true;
   setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; }, 2000);
   // Sync background
   updatePersonInstructions(pageId, text).then(r => {
@@ -441,8 +557,7 @@ async function doCreateNotion(ev, person) {
   btn.disabled  = true;
   const r = await createPersonInNotion(person);
   const actions = document.getElementById('fallback-actions');
-  const card = btn.closest('.card');
-  const badge = card ? card.querySelector('.badge') : null;
+  const badge   = document.getElementById('main-badge');
 
   if (r?.success && actions && badge) {
     const url = r.notion_page_url || notionHref(r.notion_page_id);
@@ -454,8 +569,7 @@ async function doCreateNotion(ev, person) {
     actions.remove();
     invalidateIndex();
   } else {
-    btn.innerHTML = `${icon('alert')} ${esc(r?.error || 'Réessayer')}`;
-    btn.title     = r?.error || '';
+    btn.innerHTML = `${icon('alert')} Réessayer`;
     btn.disabled  = false;
   }
 }
@@ -480,8 +594,30 @@ function renderOthers(others, convToken) {
         <div class="p-name">${esc(p.name)}</div>
         <div class="p-email">${esc(p.email)}</div>
       </div>
+      <button class="p-vip ${p.vip ? 'is-vip' : ''}" id="vip-other-${i}"
+              data-idx="${i}" title="${p.vip ? 'Retirer du statut VIP' : 'Marquer comme VIP'}"
+              aria-pressed="${p.vip ? 'true' : 'false'}">
+        ${p.vip ? icon('starFill') : icon('star')}
+      </button>
       <span class="p-arrow">${icon('arrow')}</span>
     </div>`).join('');
+
+  // VIP toggle on participant rows — stop propagation so it doesn't also promote
+  list.querySelectorAll('.p-vip').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.idx, 10);
+      const part = S.others[idx];
+      const nowVip = !btn.classList.contains('is-vip');
+      btn.classList.toggle('is-vip', nowVip);
+      btn.setAttribute('aria-pressed', nowVip ? 'true' : 'false');
+      btn.title = nowVip ? 'Retirer du statut VIP' : 'Marquer comme VIP';
+      btn.innerHTML = nowVip ? icon('starFill') : icon('star');
+      if (part) part.vip = nowVip;
+      toast(nowVip ? `${part?.name || 'Contact'} marqué VIP` : `${part?.name || 'Contact'} retiré des VIP`);
+      callProxy('toggle_vip', { email: part?.email, vip: nowVip });
+    });
+  });
 
   // Row click → promote this participant to "Contact principal"
   list.querySelectorAll('.participant').forEach(row => {
@@ -500,8 +636,17 @@ function renderOthers(others, convToken) {
     if (data?.found) {
       dot.classList.remove('missing');
       dot.classList.add('found');
-      // Coche blanche dans la pastille verte (visible vs simple point)
-      dot.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"><path d="M5 12l5 5l10 -10"/></svg>`;
+    }
+    // Propagate VIP status if Notion confirms
+    if (data?.vip) {
+      p.vip = true;
+      const star = document.getElementById(`vip-other-${i}`);
+      if (star && !star.classList.contains('is-vip')) {
+        star.classList.add('is-vip');
+        star.innerHTML = icon('starFill');
+        star.title = 'Retirer du statut VIP';
+        star.setAttribute('aria-pressed', 'true');
+      }
     }
   });
 }
@@ -523,20 +668,18 @@ function bootMissive(attempt = 0) {
       </div>`;
     return;
   }
-  console.log('[POF] Missive SDK détectée. Version:', Missive?.id);
+  console.log('[POF] Missive SDK détectée.');
 
   // Pré-charge l'index Personnes en background
   ensureIndex().catch(e => console.warn('[POF] index preload failed:', e));
 
-  // Mock preview : conserve l'ancienne API on('conversation', cb)
+  // Mock preview : ancienne API on('conversation', cb)
   if (window.__POF_MOCK) {
     Missive.on('conversation', (id, payload) => handleConversation(id, payload?.conversation));
     return;
   }
 
   // Prod : API officielle Missive Sidebar SDK
-  // - 'change:conversations' reçoit un array d'IDs sélectionnées
-  // - retroactive: true → callback déclenché immédiatement si une conv est déjà sélectionnée
   Missive.on('change:conversations', async (ids) => {
     console.log('[POF] change:conversations:', ids);
     if (!ids || !ids.length) { renderNoContact(); return; }
@@ -544,7 +687,6 @@ function bootMissive(attempt = 0) {
     try {
       const convs = await Missive.fetchConversations(ids);
       const conv = Array.isArray(convs) ? convs[0] : convs;
-      console.log('[POF] fetched conversation:', conv);
       handleConversation(id, conv);
     } catch (e) {
       console.error('[POF] fetchConversations failed:', e);
@@ -558,7 +700,12 @@ async function handleConversation(id, conversation) {
   S.conversationId = id;
   S.convPageId     = null;
   S.convOrigText   = '';
-  document.getElementById('conv-textarea').value = '';
+  S.convSuggested  = false;
+  S.mainNotion     = null;
+  TaskState._userExpanded = false;
+  const _ta = document.getElementById('conv-textarea');
+  _ta.value = '';
+  _ta.classList.remove('is-suggested');
   document.getElementById('conv-missive-id').textContent = id || '—';
 
   const participants = extractParticipants(conversation);
@@ -568,14 +715,14 @@ async function handleConversation(id, conversation) {
   S.main   = participants[0];
   S.others = participants.slice(1);
 
+  // Extrait le subject pour le brief podcast
+  const msg = conversation?.latest_message || conversation?.messages?.[conversation.messages.length - 1];
+  S.convSubject = msg?.subject || conversation?.subject || '';
+
   renderMainLoading(S.main);
   renderOthers(S.others, id);
   loadConvInstructions(id);
   loadTasks(id);
-
-  // Extrait le subject pour le brief podcast
-  const msg = conversation?.latest_message || conversation?.messages?.[0];
-  S.convSubject = msg?.subject || conversation?.subject || '';
 
   // Pré-remplit le formulaire de tâche (respecte les champs dirty)
   prefillTaskForm();
@@ -586,6 +733,12 @@ async function handleConversation(id, conversation) {
   if (id !== S.conversationId) return;
   S.mainNotion = notionData;
   renderMain(S.main, notionData);
+
+  // Si trouvé en prod, enrichit en background (meetings + données fraîches).
+  // En mock, le dump_persons contient déjà tout.
+  if (notionData?.found && !window.__POF_MOCK) {
+    enrichMainAsync(S.main);
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -593,7 +746,42 @@ window.addEventListener('DOMContentLoaded', () => {
   setupTaskActions();
   setupTaskBacklog();
   setupDirtyTracking();
+  setupConvTextarea();
 });
+
+/* Conv textarea focus behavior:
+   - If content is AI-suggested → clear on focus (cursor ready to write)
+   - If content is from Notion history → place cursor at end on focus  */
+function setupConvTextarea() {
+  const ta = document.getElementById('conv-textarea');
+  if (!ta) return;
+  ta.addEventListener('focus', () => {
+    if (S.convSuggested && ta.value) {
+      ta.value = '';
+      ta.classList.remove('is-suggested');
+      S.convSuggested = false;
+      // S.convOrigText stays empty-equivalent — original was a suggestion,
+      // not user-saved content, so cancel should clear too.
+      S.convOrigText = '';
+      return;
+    }
+    // Historical content — place cursor at end
+    const len = ta.value.length;
+    if (len > 0) {
+      // Defer so the click's default caret placement doesn't override us
+      requestAnimationFrame(() => {
+        try { ta.setSelectionRange(len, len); } catch (_) {}
+      });
+    }
+  });
+  // If user types into suggested content directly (paste, IME), drop the styling
+  ta.addEventListener('input', () => {
+    if (ta.classList.contains('is-suggested')) {
+      ta.classList.remove('is-suggested');
+      S.convSuggested = false;
+    }
+  });
+}
 
 /* ════════════════════════════════════════════════════════
    TOAST
@@ -636,44 +824,42 @@ function togglePanel(triggerSel, panelId) {
 }
 
 /* ════════════════════════════════════════════════════════
-   TASK ACTIONS
+   TASK ACTIONS — optimistic everywhere
    ════════════════════════════════════════════════════════ */
-/* Helper : fire action then show checkmark on success, toast on error. */
-function fireAndConfirm(rowEl, actionName, payload, successMsg) {
-  if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
-  flashRow(rowEl);
-  // Toast immédiat pour confirmer la prise en compte
-  toast(successMsg);
-  // Marker visuel persistant sur la flèche
-  flashActionSuccess(rowEl);
-  // Sync background ; si échec, rollback du checkmark + toast erreur
-  callProxy(actionName, { conversation_id: S.conversationId, ...payload }).then(r => {
-    if (!r?.success) {
-      // Restaure la flèche et signale l'erreur
-      const arrow = rowEl.querySelector('.action-arrow');
-      if (arrow) delete arrow.dataset.success;
-      toast(r?.error || 'Erreur action', 'error');
-    }
-  }).catch(() => toast('Erreur réseau', 'error'));
-}
-
 function setupTaskActions() {
-  // Briefing podcast — appel direct webhook avec contexte
+  // Briefing podcast — one-shot avec contexte enrichi
   const briefBtn = document.querySelector('[data-action="brief-podcast"]');
   if (briefBtn) briefBtn.addEventListener('click', () => {
-    fireAndConfirm(briefBtn, 'brief_podcast', {
+    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+    setActionDone(briefBtn, 'Briefing lancé');
+    toast('Briefing podcast envoyé');
+    callProxy('brief_podcast', {
+      conversation_id: S.conversationId,
       subject: S.convSubject || '',
       main:    S.main,
       others:  S.others,
       person_instructions: S.mainNotion?.person_instructions || '',
       conv_instructions:   S.convOrigText || '',
-    }, 'Briefing podcast envoyé');
+    }).then(r => {
+      if (!r?.success) {
+        revertAction(briefBtn);
+        toast(r?.error || 'Erreur briefing', 'error');
+      }
+    }).catch(() => { revertAction(briefBtn); toast('Erreur réseau', 'error'); });
   });
 
   // Estimer l'opportunité — one-shot
   const estBtn = document.querySelector('[data-action="estimate-opp"]');
   if (estBtn) estBtn.addEventListener('click', () => {
-    fireAndConfirm(estBtn, 'estimate_opportunity', {}, 'Estimation en cours — résultat en commentaire');
+    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+    setActionDone(estBtn, 'Estimation lancée');
+    toast('Estimation en cours — résultat en commentaire');
+    callProxy('estimate_opportunity', { conversation_id: S.conversationId }).then(r => {
+      if (!r?.success) {
+        revertAction(estBtn);
+        toast(r?.error || 'Erreur estimation', 'error');
+      }
+    }).catch(() => { revertAction(estBtn); toast('Erreur réseau', 'error'); });
   });
 
   // Toggle panels
@@ -681,29 +867,26 @@ function setupTaskActions() {
   togglePanel('[data-action="brief-reply"]',  'reply-panel');
   togglePanel('[data-action="sign-nda"]',     'nda-panel');
 
-  // Pré-remplit le formulaire NDA quand on ouvre le panneau (depuis S.main)
+  // Pré-remplit le formulaire NDA quand on ouvre le panneau
   const ndaToggle = document.querySelector('[data-action="sign-nda"]');
   if (ndaToggle) ndaToggle.addEventListener('click', () => {
     setTimeout(prefillNdaForm, 0);
   });
 
-  // Watch chips → écrit dans le champ Briefing veille du contact principal (optimistic)
+  // Watch chips — écrit dans le briefing veille du contact principal
   document.querySelectorAll('[data-watch]').forEach(chip => {
     chip.addEventListener('click', () => {
       if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
-      if (!S.mainNotion?.notion_page_id && !S.main?.email) {
-        toast('Contact non identifié', 'error'); return;
-      }
       chip.classList.add('selected');
       const cat = chip.dataset.watch;
       const label = chip.textContent.trim();
-      // Toast immédiat
+      const row = document.querySelector('[data-action="add-to-watch"]');
       toast(`Ajouté à la veille « ${label} »`);
-      // Checkmark sur la flèche du bouton parent
-      const parentRow = document.querySelector('[data-action="add-to-watch"]');
-      flashActionSuccess(parentRow);
-      setTimeout(() => chip.classList.remove('selected'), 1200);
-      // Sync background
+      setTimeout(() => {
+        if (row && row.classList.contains('open')) row.click();
+        if (row) setActionDone(row, `Veille : ${label}`);
+        chip.classList.remove('selected');
+      }, 400);
       callProxy('add_to_watch', {
         category: cat,
         conversation_id: S.conversationId,
@@ -712,108 +895,87 @@ function setupTaskActions() {
         contact_name:    S.main?.name,
       }).then(r => {
         if (!r?.success) {
-          const arrow = parentRow?.querySelector('.action-arrow');
-          if (arrow) delete arrow.dataset.success;
+          if (row) revertAction(row);
           toast(r?.error || 'Erreur veille', 'error');
         }
       });
     });
   });
 
-  // Brief reply → append à Instruction spécifique de la conv (optimistic)
+  // Brief reply submit — append à l'instruction conv
   const replyBtn = document.getElementById('reply-submit');
   if (replyBtn) replyBtn.addEventListener('click', () => {
     const ta = document.getElementById('reply-instructions');
     if (!ta.value.trim()) { ta.focus(); return; }
     const instructions = ta.value;
-    // UX immédiate : ferme le panneau, reset, toast, checkmark
+    const row = document.querySelector('[data-action="brief-reply"]');
+    // UX immédiate : ferme, reset, toast
     ta.value = '';
-    document.querySelector('[data-action="brief-reply"]')?.click();
+    if (row) { row.click(); setActionDone(row, 'Réponse briefée'); }
     toast('Brief enregistré sur la conversation');
-    flashActionSuccess(document.querySelector('[data-action="brief-reply"]'));
-    // Sync background
     callProxy('brief_reply', {
       instructions,
       conversation_id: S.conversationId,
     }).then(r => {
       if (!r?.success) {
-        const arrow = document.querySelector('[data-action="brief-reply"] .action-arrow');
-        if (arrow) delete arrow.dataset.success;
+        if (row) revertAction(row);
         toast(r?.error || 'Erreur brief', 'error');
       }
     });
   });
 
-  // NDA submit + validation (optimistic)
+  // NDA submit + validation
   const ndaBtn = document.getElementById('nda-submit');
   if (ndaBtn) ndaBtn.addEventListener('click', () => {
     const form = document.getElementById('nda-panel');
-    if (!form) return;
     let valid = true;
     form.querySelectorAll('[required]').forEach(input => {
       if (!input.value.trim()) { input.classList.add('invalid'); valid = false; }
       else input.classList.remove('invalid');
     });
     const err = form.querySelector('.field-error');
-    if (!valid) { if (err) err.removeAttribute('hidden'); return; }
-    if (err) err.setAttribute('hidden', '');
+    if (!valid) { err.removeAttribute('hidden'); return; }
+    err.setAttribute('hidden', '');
     const data = {};
     form.querySelectorAll('input').forEach(i => { data[i.name] = i.value; });
-    // UX immédiate
-    document.querySelector('[data-action="sign-nda"]')?.click();
+    const row = document.querySelector('[data-action="sign-nda"]');
+    if (row) { row.click(); setActionDone(row, 'NDA envoyé'); }
     toast('NDA envoyé');
-    flashActionSuccess(document.querySelector('[data-action="sign-nda"]'));
-    // Sync background
     callProxy('send_nda', { ...data, conversation_id: S.conversationId }).then(r => {
       if (!r?.success) {
-        const arrow = document.querySelector('[data-action="sign-nda"] .action-arrow');
-        if (arrow) delete arrow.dataset.success;
+        if (row) revertAction(row);
         toast(r?.error || 'Erreur NDA', 'error');
       }
     });
   });
 }
 
+function revertAction(row) {
+  if (!row) return;
+  row.classList.remove('action-done', 'is-loading');
+  const arr = row.querySelector('.action-arrow');
+  if (arr) arr.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/></svg>`;
+  const lab = row.querySelector('.action-label');
+  if (lab && lab.dataset.orig) { lab.textContent = lab.dataset.orig; delete lab.dataset.orig; }
+  clearTimeout(row._t);
+}
+
 function prefillNdaForm() {
   const form = document.getElementById('nda-panel');
   if (!form || !S.main) return;
   const f = name => form.querySelector(`input[name="${name}"]`);
-  if (f('signataire')) f('signataire').value = S.main.name || '';
-  if (f('email'))      f('email').value      = S.main.email || '';
-  if (f('societe')) {
+  if (f('signataire') && !isDirty(f('signataire'))) f('signataire').value = S.main.name || '';
+  if (f('email')      && !isDirty(f('email')))      f('email').value      = S.main.email || '';
+  if (f('societe')    && !isDirty(f('societe'))) {
     // Société = morceau avant le .com du domaine, capitalisé
     const dom = (S.main.email || '').split('@')[1] || '';
     const stub = dom.split('.')[0] || '';
     f('societe').value = stub ? stub.charAt(0).toUpperCase() + stub.slice(1) : '';
   }
-  if (f('date')) f('date').value = new Date().toISOString().slice(0, 10);
+  if (f('date') && !isDirty(f('date'))) f('date').value = new Date().toISOString().slice(0, 10);
 }
 
-function flashRow(row) {
-  row.style.borderColor = 'var(--pof-teal-dark)';
-  row.style.background  = '#F1F8F7';
-  setTimeout(() => { row.style.borderColor = ''; row.style.background = ''; }, 600);
-}
-
-/* Remplace la flèche d'une action-row par un checkmark teal pendant 2.5s,
-   pour confirmation visuelle persistante (le toast peut être manqué). */
-function flashActionSuccess(rowEl) {
-  if (!rowEl) return;
-  const arrow = rowEl.querySelector('.action-arrow');
-  if (!arrow) return;
-  const original = arrow.innerHTML;
-  arrow.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="var(--pof-teal-dark)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"><path d="M5 12l5 5l10 -10"/></svg>`;
-  arrow.dataset.success = '1';
-  setTimeout(() => {
-    if (arrow.dataset.success === '1') {
-      arrow.innerHTML = original;
-      delete arrow.dataset.success;
-    }
-  }, 2500);
-}
-
-/* Dirty tracking : tag un input/textarea/segmented quand l'utilisateur
-   l'a modifié manuellement. Toute fonction de prefill vérifie le flag. */
+/* Dirty tracking : marque un champ quand l'utilisateur l'a édité. */
 function markDirty(el) { if (el) el.dataset.dirty = '1'; }
 function isDirty(el)   { return el && el.dataset.dirty === '1'; }
 function clearDirty(el){ if (el) delete el.dataset.dirty; }
@@ -826,10 +988,13 @@ function setupDirtyTracking() {
   document.querySelectorAll('#task-prio .seg, #task-assignee .seg').forEach(seg => {
     seg.addEventListener('click', () => markDirty(seg.parentElement), { once: true });
   });
+  // NDA form fields
+  document.querySelectorAll('#nda-panel input').forEach(el => {
+    el.addEventListener('input', () => markDirty(el), { once: true });
+  });
 }
 
-/* Pré-remplit le formulaire de tâche depuis le contact courant.
-   Respecte les champs dirty (l'utilisateur a déjà tapé). */
+/* Pré-remplit le formulaire de tâche depuis le contact courant. */
 function prefillTaskForm() {
   const name = document.getElementById('task-name');
   const desc = document.getElementById('task-desc');
@@ -845,6 +1010,178 @@ function prefillTaskForm() {
     const d = new Date();
     d.setDate(d.getDate() + 3);
     deadline.value = d.toISOString().slice(0, 10);
+  }
+}
+
+function flashRow(row) {
+  // Activated visual state — much more legible than a 600ms flash
+  row.classList.add('is-loading');
+}
+function setActionDone(row, label) {
+  row.classList.remove('is-loading');
+  row.classList.add('action-done');
+  // Replace arrow with a check
+  const arrow = row.querySelector('.action-arrow');
+  if (arrow) {
+    arrow.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"><path d="M5 12l5 5l10 -10"/></svg>`;
+  }
+  if (label) {
+    const lab = row.querySelector('.action-label');
+    if (lab) {
+      const origLabel = lab.dataset.orig || lab.textContent;
+      lab.dataset.orig = origLabel;
+      lab.textContent = label;
+    }
+  }
+  // Auto-revert after 4s so the user can run it again
+  clearTimeout(row._t);
+  row._t = setTimeout(() => {
+    row.classList.remove('action-done');
+    const arr = row.querySelector('.action-arrow');
+    if (arr) arr.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/></svg>`;
+    const lab = row.querySelector('.action-label');
+    if (lab && lab.dataset.orig) { lab.textContent = lab.dataset.orig; delete lab.dataset.orig; }
+  }, 4000);
+}
+
+/* ════════════════════════════════════════════════════════
+   CONTACT FIELDS (Company, Tags, Phone, Meetings)
+   ════════════════════════════════════════════════════════ */
+function formatMeetingDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' });
+}
+
+function phoneToWhatsApp(phone) {
+  return 'https://wa.me/' + (phone || '').replace(/[^\d]/g, '');
+}
+
+function renderContactFields(notionData, person) {
+  const out = [];
+
+  // Company
+  if (notionData.company) {
+    out.push(`
+      <div class="contact-field is-readonly">
+        <span class="cf-icon">${icon('building')}</span>
+        <div class="cf-body">
+          <div class="cf-label">Société</div>
+          <div class="cf-value">${esc(notionData.company)}</div>
+        </div>
+      </div>`);
+  }
+
+  // Tags
+  if (Array.isArray(notionData.tags) && notionData.tags.length) {
+    out.push(`
+      <div class="contact-field is-readonly">
+        <span class="cf-icon">${icon('tag')}</span>
+        <div class="cf-body">
+          <div class="cf-label">Tags Notion</div>
+          <div class="cf-tags">
+            ${notionData.tags.map(t => `<span class="cf-tag">${esc(t)}</span>`).join('')}
+          </div>
+        </div>
+      </div>`);
+  }
+
+  // Phone
+  const phone       = notionData.phone || '';
+  const phoneSource = notionData.phone_source || (phone ? 'notion' : 'none');
+  if (phone) {
+    const isAi = phoneSource === 'email_signature';
+    out.push(`
+      <div class="contact-field is-readonly">
+        <span class="cf-icon">${icon('phone')}</span>
+        <div class="cf-body">
+          <div class="cf-label">
+            Téléphone
+            ${isAi ? `<span class="ai-found-badge" title="Détecté dans la signature du dernier email">${icon('sparkles')} signature email</span>` : ''}
+          </div>
+          <div class="phone-row">
+            <span class="phone-number ${isAi ? 'ai-found' : ''}">${esc(phone)}</span>
+            <a class="whatsapp-link" href="${esc(phoneToWhatsApp(phone))}" target="_blank" title="Ouvrir WhatsApp">
+              ${icon('whatsapp')}
+            </a>
+            ${isAi ? `
+              <button class="add-to-notion-btn" id="phone-add-notion" title="Ajouter ce numéro à la fiche Notion">
+                ${icon('plus')} Ajouter à Notion
+              </button>` : ''}
+          </div>
+        </div>
+      </div>`);
+  }
+
+  // Meetings (last 5)
+  if (Array.isArray(notionData.meetings) && notionData.meetings.length) {
+    const meetings = notionData.meetings.slice(0, 5);
+    out.push(`
+      <div class="contact-field is-readonly">
+        <span class="cf-icon">${icon('aiNotes')}</span>
+        <div class="cf-body">
+          <div class="cf-label">Notes de réunion Notion</div>
+          <div class="cf-meetings">
+            ${meetings.map(m => `
+              <div class="cf-meeting">
+                <span class="cf-meeting-title">${esc(m.title)}</span>
+                <span class="cf-meeting-date">${esc(formatMeetingDate(m.date))}</span>
+                ${notionPill(m.url, { title: 'Ouvrir la note dans Notion' })}
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>`);
+  }
+
+  if (!out.length) return '';
+  return `<div class="contact-fields">${out.join('')}</div>`;
+}
+
+function setupVipToggle(pageId) {
+  const btn = document.getElementById('vip-toggle');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const wasVip = btn.classList.contains('is-vip');
+    const nowVip = !wasVip;
+    btn.classList.toggle('is-vip', nowVip);
+    btn.setAttribute('aria-pressed', nowVip ? 'true' : 'false');
+    btn.title = nowVip ? 'Retirer du statut VIP' : 'Marquer comme VIP';
+    btn.innerHTML = nowVip ? icon('starFill') : icon('star');
+    btn.classList.remove('just-toggled');
+    void btn.offsetWidth;
+    btn.classList.add('just-toggled');
+    toast(nowVip ? 'Marqué VIP' : 'Retiré des VIP');
+    await callProxy('toggle_vip', { page_id: pageId, vip: nowVip });
+  });
+}
+
+function setupContactFieldActions(notionData, person) {
+  const addBtn = document.getElementById('phone-add-notion');
+  if (addBtn) {
+    addBtn.addEventListener('click', async () => {
+      addBtn.disabled = true;
+      addBtn.innerHTML = `<div class="spinner" style="width:11px;height:11px;border-width:1.5px"></div> Ajout…`;
+      const r = await callProxy('add_phone_to_notion', {
+        page_id: notionData.notion_page_id,
+        phone: notionData.phone,
+      });
+      if (r?.success) {
+        // Promote to "notion" source
+        const row = addBtn.closest('.contact-field');
+        if (row) {
+          const num = row.querySelector('.phone-number');
+          if (num) num.classList.remove('ai-found');
+          const badge = row.querySelector('.ai-found-badge');
+          if (badge) badge.remove();
+          addBtn.outerHTML = '';
+        }
+        toast('Numéro ajouté à Notion');
+      } else {
+        addBtn.disabled = false;
+        addBtn.innerHTML = `${icon('alert')} Réessayer`;
+      }
+    });
   }
 }
 
@@ -867,11 +1204,11 @@ function setupEnrichContact() {
     const ta = document.getElementById('enrich-instructions');
     if (!ta?.value.trim()) { ta?.focus(); return; }
     const instructions = ta.value;
-    // UX immédiate : ferme le panneau, reset, toast
+    // UX immédiate : ferme, reset, toast
     ta.value = '';
     btn.click();
     toast('Briefing veille mis à jour');
-    // Sync background
+    // Sync background avec contexte contact
     callProxy('enrich_contact', {
       conversation_id: S.conversationId,
       instructions,
@@ -889,8 +1226,10 @@ function setupEnrichContact() {
    ════════════════════════════════════════════════════════ */
 const TaskState = {
   tasks: [],
+  proposed: [],
   prio:  'P1',
   assignee: 'ai',
+  _userExpanded: false,
 };
 
 function setupTaskBacklog() {
@@ -913,12 +1252,188 @@ function setupTaskBacklog() {
   // Create button
   const createBtn = document.getElementById('task-create');
   if (createBtn) createBtn.addEventListener('click', createTask);
+
+  // Toggle: show all quick actions
+  const toggleBtn = document.getElementById('actions-toggle');
+  if (toggleBtn) toggleBtn.addEventListener('click', () => {
+    const sec = document.getElementById('actions-secondary');
+    const isCollapsed = sec.classList.contains('collapsed');
+    if (isCollapsed) {
+      sec.classList.remove('collapsed');
+      toggleBtn.classList.add('expanded');
+      toggleBtn.querySelector('.show-more-label').textContent = 'Replier les actions';
+      TaskState._userExpanded = true;
+    } else {
+      sec.classList.add('collapsed');
+      toggleBtn.classList.remove('expanded');
+      toggleBtn.querySelector('.show-more-label').textContent = '3 actions de plus';
+      TaskState._userExpanded = false;
+    }
+  });
+
+  // Toggle: expand "Créer une tâche personnalisée"
+  const newTaskToggle = document.getElementById('new-task-toggle');
+  const newTaskForm   = document.getElementById('new-task-form');
+  if (newTaskToggle && newTaskForm) {
+    newTaskToggle.addEventListener('click', () => {
+      const isOpen = newTaskToggle.classList.toggle('open');
+      if (isOpen) {
+        newTaskForm.removeAttribute('hidden');
+        setTimeout(() => document.getElementById('task-name')?.focus(), 80);
+      } else {
+        newTaskForm.setAttribute('hidden', '');
+      }
+    });
+  }
 }
 
 async function loadTasks(convId) {
-  const r = await callProxy('list_tasks', { conversation_id: convId });
-  TaskState.tasks = Array.isArray(r?.tasks) ? r.tasks : [];
+  const [r, p] = await Promise.all([
+    callProxy('list_tasks', { conversation_id: convId }),
+    callProxy('list_proposed_tasks', { conversation_id: convId }),
+  ]);
+  TaskState.tasks    = Array.isArray(r?.tasks) ? r.tasks : [];
+  TaskState.proposed = Array.isArray(p?.proposed) ? p.proposed : [];
   renderTasks();
+  renderProposed();
+  updateActionsCollapse();
+}
+
+/* ════════════════════════════════════════════════════════
+   PROPOSED TASKS
+   ════════════════════════════════════════════════════════ */
+function renderProposed() {
+  const list = document.getElementById('proposed-list');
+  const cnt  = document.getElementById('proposed-count');
+  if (!list || !cnt) return;
+  const items = TaskState.proposed || [];
+  cnt.textContent = items.length;
+
+  if (!items.length) {
+    list.innerHTML = `<div class="proposed-empty">Pas de tâche détectée dans la conversation.</div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(t => {
+    const dueLabel = formatDeadline(t.deadline);
+    const overdue  = isOverdue(t.deadline);
+    const assignee = t.assignee === 'human'
+      ? `<span class="meta-item">${icon('human')} Humain</span>`
+      : `<span class="meta-item">${icon('robot')} IA</span>`;
+    return `
+      <div class="proposed-task" data-id="${esc(t.id)}">
+        <div class="proposed-head">
+          <div class="proposed-title">${esc(t.name)}</div>
+          <div class="proposed-actions">
+            <button class="proposed-btn" data-pt-expand="${esc(t.id)}" title="Détails">
+              ${icon('chevron')}
+            </button>
+            <button class="proposed-btn dismiss" data-pt-dismiss="${esc(t.id)}" title="Ignorer">
+              ${icon('x')}
+            </button>
+            <button class="proposed-btn accept" data-pt-accept="${esc(t.id)}" title="Créer cette tâche">
+              ${icon('check')}
+            </button>
+          </div>
+        </div>
+        <div class="proposed-meta">
+          <span class="task-prio ${t.prio.toLowerCase()}">${esc(t.prio)}</span>
+          <span class="meta-item ${overdue ? 'overdue' : ''}">${icon('calendar')} ${esc(dueLabel)}</span>
+          ${assignee}
+        </div>
+        <div class="proposed-desc">${esc(t.description || '')}</div>
+      </div>`;
+  }).join('');
+
+  // Wire actions
+  list.querySelectorAll('[data-pt-expand]').forEach(b => {
+    b.addEventListener('click', () => {
+      const card = b.closest('.proposed-task');
+      const open = card.classList.toggle('expanded');
+      const svg = b.querySelector('svg');
+      if (svg) svg.style.transform = open ? 'rotate(90deg)' : '';
+    });
+  });
+  list.querySelectorAll('[data-pt-dismiss]').forEach(b => {
+    b.addEventListener('click', () => dismissProposed(b.dataset.ptDismiss));
+  });
+  list.querySelectorAll('[data-pt-accept]').forEach(b => {
+    b.addEventListener('click', () => acceptProposed(b.dataset.ptAccept));
+  });
+}
+
+function dismissProposed(id) {
+  const card = document.querySelector(`.proposed-task[data-id="${CSS.escape(id)}"]`);
+  if (!card) return;
+  card.classList.add('dismissed');
+  setTimeout(() => {
+    TaskState.proposed = TaskState.proposed.filter(t => t.id !== id);
+    renderProposed();
+    updateActionsCollapse();
+  }, 280);
+}
+
+async function acceptProposed(id) {
+  const t = TaskState.proposed.find(x => x.id === id);
+  if (!t) return;
+  const card = document.querySelector(`.proposed-task[data-id="${CSS.escape(id)}"]`);
+  if (card) {
+    card.classList.add('accepted');
+    const btn = card.querySelector('[data-pt-accept]');
+    if (btn) {
+      btn.innerHTML = `<div class="spinner" style="width:11px;height:11px;border-width:1.5px"></div>`;
+      btn.disabled = true;
+    }
+  }
+  const r = await callProxy('create_task', {
+    conversation_id: S.conversationId,
+    name: t.name, description: t.description, deadline: t.deadline,
+    prio: t.prio, assignee: t.assignee,
+  });
+  const newTask = r?.task || {
+    id: 'acc-' + Date.now(), name: t.name, prio: t.prio,
+    assignee: t.assignee, deadline: t.deadline, done: false,
+    notion_url: r?.notion_url || '#',
+  };
+  TaskState.tasks.unshift(newTask);
+  toast('Tâche créée dans Notion');
+  setTimeout(() => {
+    TaskState.proposed = TaskState.proposed.filter(x => x.id !== id);
+    renderTasks();
+    renderProposed();
+    updateActionsCollapse();
+  }, 380);
+}
+
+/* ════════════════════════════════════════════════════════
+   QUICK ACTIONS — collapse when many tasks/proposed
+   ════════════════════════════════════════════════════════ */
+function updateActionsCollapse() {
+  const sec    = document.getElementById('actions-secondary');
+  const toggle = document.getElementById('actions-toggle');
+  if (!sec || !toggle) return;
+
+  const taskCount     = TaskState.tasks.length + (TaskState.proposed?.length || 0);
+  const manyTasks     = taskCount > 1;
+
+  if (TaskState._userExpanded) {
+    // User chose to expand — keep open + show "Voir moins"
+    sec.classList.remove('collapsed');
+    toggle.classList.add('expanded');
+    toggle.querySelector('.show-more-label').textContent = 'Replier les actions';
+    toggle.removeAttribute('hidden');
+    return;
+  }
+
+  if (manyTasks) {
+    sec.classList.add('collapsed');
+    toggle.removeAttribute('hidden');
+    toggle.querySelector('.show-more-label').textContent = '3 actions de plus';
+    toggle.classList.remove('expanded');
+  } else {
+    sec.classList.remove('collapsed');
+    toggle.setAttribute('hidden', '');
+  }
 }
 
 function renderTasks() {
@@ -930,7 +1445,7 @@ function renderTasks() {
   if (!TaskState.tasks.length) {
     list.innerHTML = `
       <div style="padding:14px 4px;color:var(--text-xmuted);font-size:11.5px;text-align:left;">
-        Aucune tâche liée — créez-en une ci-dessous.
+        Aucune tâche liée à cette conversation.
       </div>`;
     return;
   }
@@ -956,9 +1471,7 @@ function renderTasks() {
             ${assignee}
           </div>
         </div>
-        <a href="${esc(t.notion_url || '#')}" target="_blank" class="task-arrow" aria-label="Ouvrir dans Notion" title="Ouvrir dans Notion">
-          ${icon('external')}
-        </a>
+        ${notionPill(t.notion_url)}
       </div>`;
   }).join('');
 
@@ -987,8 +1500,8 @@ function toggleTask(id) {
 }
 
 /* Création optimiste :
-   1. Confirme immédiatement (toast + tâche en tête de liste avec marker "pending")
-   2. Reset le form pour que l'utilisateur enchaîne
+   1. Confirme immédiatement (toast + tâche en tête avec marker _pending)
+   2. Reset le form pour chaîner
    3. Sync en arrière-plan; rollback si échec
 */
 function createTask() {
@@ -1003,7 +1516,7 @@ function createTask() {
   const prio = TaskState.prio;
   const assignee = TaskState.assignee;
 
-  // 1. Optimistic UI : ajout immédiat à la liste
+  // 1. Optimistic UI : ajout immédiat
   const tempId = 'pending-' + Date.now();
   const ghost = {
     id: tempId, name, prio, assignee, deadline,
@@ -1012,31 +1525,28 @@ function createTask() {
   TaskState.tasks.unshift(ghost);
   renderTasks();
 
-  // 2. Reset form + clear dirty pour repartir frais
+  // 2. Reset form (garde deadline/prio/assignee comme défauts)
   nameEl.value = ''; clearDirty(nameEl);
   descEl.value = ''; clearDirty(descEl);
-  // Garde deadline + prio + assignee comme défauts pour la prochaine tâche
 
   toast('Tâche créée dans Notion');
 
-  // 3. Sync en arrière-plan
+  // 3. Sync background
   callProxy('create_task', {
     conversation_id: S.conversationId,
     name, description: desc, deadline, prio, assignee,
   }).then(r => {
     const idx = TaskState.tasks.findIndex(t => t.id === tempId);
-    if (idx < 0) return; // tâche supprimée entre-temps
+    if (idx < 0) return;
     if (r?.success && r.task) {
-      // Remplace le ghost par la vraie tâche Notion
       TaskState.tasks[idx] = { ...r.task, _pending: false };
       renderTasks();
     } else if (!r?.success) {
-      // Rollback : retire la tâche, toast d'erreur
       TaskState.tasks.splice(idx, 1);
       renderTasks();
       toast(r?.error || 'Erreur création tâche', 'error');
     }
-  }).catch(e => {
+  }).catch(() => {
     const idx = TaskState.tasks.findIndex(t => t.id === tempId);
     if (idx >= 0) { TaskState.tasks.splice(idx, 1); renderTasks(); }
     toast('Erreur réseau', 'error');
