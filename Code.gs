@@ -42,12 +42,14 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.3' };       break;
+      case 'ping':                       result = { ok: true, version: '1.4' };       break;
+      case 'dump_persons':               result = handleDumpPersons_(body);           break;
       case 'lookup_person':              result = handleLookupPerson_(body);          break;
       case 'create_person':              result = handleCreatePerson_(body);          break;
       case 'update_person_instructions': result = handleUpdatePersonInstr_(body);     break;
       case 'lookup_conv':                result = handleLookupConv_(body);            break;
       case 'upsert_conv':                result = handleUpsertConv_(body);            break;
+      case 'list_conv_tasks':            result = handleListConvTasks_(body);         break;
       case 'lookup_folk':                result = handleLookupFolk_(body);            break;
       default:                           return json_({ error: 'unknown action: ' + action });
     }
@@ -58,7 +60,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.3' });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.4' });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -130,6 +132,50 @@ function notionFetch_(method, path, body) {
     throw new Error('Notion API ' + code + ': ' + text.slice(0, 400));
   }
   return JSON.parse(text);
+}
+
+/* ─── Dump persons (index complet pour matching client) ────── */
+
+/**
+ * Retourne l'index complet de la base Personnes pour matching local instantané.
+ * Mis en cache côté frontend (sessionStorage, TTL 30 min) → 1 seul appel
+ * par session de navigation, puis lookups instantanés sur tous les participants.
+ */
+function handleDumpPersons_(_body) {
+  var dbId = cfg_('NOTION_PERSONS_DB');
+  var emailProp = cfg_('PERSON_EMAIL_PROP') || 'E-mail';
+  var instrProp = cfg_('PERSON_INSTRUCTIONS_PROP') || 'Instruction traitement des mails';
+  if (!dbId) throw new Error('NOTION_PERSONS_DB not configured');
+
+  var all = [];
+  var cursor = null;
+  var pageCount = 0;
+  // Pagination Notion : 100 résultats max par page
+  do {
+    var payload = { page_size: 100 };
+    if (cursor) payload.start_cursor = cursor;
+    var resp = notionFetch_('POST', '/databases/' + dbId + '/query', payload);
+    var results = resp.results || [];
+    for (var i = 0; i < results.length; i++) {
+      var page = results[i];
+      var props = page.properties || {};
+      var title = (props['Nom'] && props['Nom'].title) || [];
+      var emailVal = (props[emailProp] && props[emailProp].email) || '';
+      var instrVal = (props[instrProp] && props[instrProp].rich_text) || [];
+      all.push({
+        page_id: page.id,
+        page_url: page.url || notionPageUrl_(page.id),
+        name: richTextValue_(title),
+        email: String(emailVal || '').toLowerCase(),
+        instructions: richTextValue_(instrVal)
+      });
+    }
+    cursor = resp.has_more ? resp.next_cursor : null;
+    pageCount++;
+    if (pageCount > 50) break; // safety : max 5000 entries
+  } while (cursor);
+
+  return { count: all.length, persons: all, ts: Date.now() };
 }
 
 /* ─── Lookup person ─────────────────────────────────────────── */
@@ -300,6 +346,66 @@ function handleUpsertConv_(body) {
     });
     return { success: true, notion_page_id: created.id, created: true };
   }
+}
+
+/* ─── List conversation tasks ────────────────────────────────── */
+
+/**
+ * Retourne les tâches Notion liées à la conversation (relation "Tâche associée"
+ * de la base Conversations vers Tasks Backlog).
+ */
+function handleListConvTasks_(body) {
+  var convId = String(body.missive_conversation_id || '');
+  var dbId   = cfg_('NOTION_CONVS_DB');
+  var idProp = cfg_('CONV_MISSIVE_ID_PROP') || 'Agent session ID';
+  var relProp = 'Tâche associée';
+
+  if (!dbId)   throw new Error('NOTION_CONVS_DB not configured');
+  if (!convId) return { found: false, tasks: [] };
+
+  // 1) Find conversation page
+  var search = notionFetch_('POST', '/databases/' + dbId + '/query', {
+    filter: { property: idProp, rich_text: { equals: convId } },
+    page_size: 1
+  });
+  if (!search.results || !search.results.length) {
+    return { found: false, tasks: [], conv_page_id: null };
+  }
+  var convPage = search.results[0];
+  var rel = (convPage.properties[relProp] && convPage.properties[relProp].relation) || [];
+
+  // 2) Fetch each linked task
+  var tasks = [];
+  for (var i = 0; i < rel.length && i < 20; i++) {
+    try {
+      var taskPage = notionFetch_('GET', '/pages/' + rel[i].id, null);
+      var p = taskPage.properties || {};
+      // Recherche du titre : essaye plusieurs noms communs
+      var titleProp = null;
+      var titleKeys = Object.keys(p);
+      for (var k = 0; k < titleKeys.length; k++) {
+        if (p[titleKeys[k]].type === 'title') { titleProp = p[titleKeys[k]]; break; }
+      }
+      var title = titleProp ? richTextValue_(titleProp.title || []) : '(sans titre)';
+      var status = (p['Etat'] && p['Etat'].status && p['Etat'].status.name) ||
+                   (p['Status'] && p['Status'].status && p['Status'].status.name) || '';
+      tasks.push({
+        page_id: taskPage.id,
+        url: taskPage.url || notionPageUrl_(taskPage.id),
+        title: title,
+        status: status
+      });
+    } catch (e) {
+      // Skip pages we can't fetch (access denied, deleted, etc.)
+    }
+  }
+
+  return {
+    found: true,
+    conv_page_id: convPage.id,
+    conv_page_url: convPage.url || notionPageUrl_(convPage.id),
+    tasks: tasks
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════

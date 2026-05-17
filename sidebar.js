@@ -39,7 +39,73 @@ const S = {
   participants:   [],
   convPageId:     null,
   convOrigText:   '',
+  personIndex:    null,  // Map<email, person> — chargée au boot
+  indexLoading:   null,  // Promise<void> en cours de chargement
 };
+
+/* ════════════════════════════════════════════════════════
+   INDEX PERSONS (cache local sessionStorage, TTL 30 min)
+   ════════════════════════════════════════════════════════ */
+const INDEX_CACHE_KEY = 'pof_persons_v1';
+const INDEX_TTL_MS    = 30 * 60 * 1000;
+
+function loadIndexFromCache() {
+  try {
+    const raw = sessionStorage.getItem(INDEX_CACHE_KEY);
+    if (!raw) return null;
+    const { ts, persons } = JSON.parse(raw);
+    if (!ts || Date.now() - ts > INDEX_TTL_MS) return null;
+    return persons;
+  } catch { return null; }
+}
+
+function saveIndexToCache(persons) {
+  try {
+    sessionStorage.setItem(INDEX_CACHE_KEY, JSON.stringify({ ts: Date.now(), persons }));
+  } catch {}
+}
+
+function buildIndex(persons) {
+  const idx = new Map();
+  for (const p of persons) {
+    if (p.email) idx.set(p.email.toLowerCase().trim(), p);
+  }
+  return idx;
+}
+
+async function ensureIndex() {
+  if (S.personIndex) return S.personIndex;
+  if (S.indexLoading) return S.indexLoading;
+
+  S.indexLoading = (async () => {
+    let persons = loadIndexFromCache();
+    if (!persons) {
+      const r = await callProxy('dump_persons', {});
+      persons = r?.persons || [];
+      if (persons.length) saveIndexToCache(persons);
+    }
+    S.personIndex = buildIndex(persons);
+    return S.personIndex;
+  })();
+
+  return S.indexLoading;
+}
+
+function lookupLocal(person) {
+  if (!S.personIndex) return null;
+  const email = (person.email || '').toLowerCase().trim();
+  if (!email) return null;
+  const hit = S.personIndex.get(email);
+  if (!hit) return null;
+  return {
+    found: true,
+    notion_page_id:  hit.page_id,
+    notion_page_url: hit.page_url,
+    name:            hit.name,
+    email:           hit.email,
+    person_instructions: hit.instructions || ''
+  };
+}
 
 /* ════════════════════════════════════════════════════════
    TABS
@@ -85,11 +151,19 @@ async function callProxy(action, args = {}) {
   }
 }
 
-const lookupInNotion              = p => callProxy('lookup_person', { email: p.email, name: p.name });
+// Lookup: matching local instantané sur l'index pré-chargé. Fallback proxy si pas d'email.
+async function lookupInNotion(p) {
+  const local = lookupLocal(p);
+  if (local) return local;
+  // Pas trouvé dans l'index local : on n'attaque pas la base, on renvoie directement found=false.
+  // (l'utilisateur peut créer la fiche via le bouton, ce qui rafraîchira l'index)
+  return { found: false };
+}
 const lookupInFolk                = p => callProxy('lookup_folk',   { email: p.email, name: p.name });
 const lookupParticipantInNotion   = p => lookupInNotion(p);
 const createPersonInNotion        = p => callProxy('create_person', { email: p.email, name: p.name });
 const updatePersonInstructions    = (pageId, text) => callProxy('update_person_instructions', { page_id: pageId, text });
+const listConvTasks               = convId => callProxy('list_conv_tasks', { missive_conversation_id: convId });
 
 /* ════════════════════════════════════════════════════════
    EXTRACT PARTICIPANTS
@@ -125,6 +199,13 @@ async function loadConvInstructions(convId) {
 async function saveConv() {
   const text = document.getElementById('conv-textarea').value;
   const btn  = document.getElementById('conv-save-btn');
+
+  if (!S.conversationId) {
+    btn.innerHTML = `${icon('alert')} Aucune conversation`;
+    setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; }, 2500);
+    return;
+  }
+
   btn.innerHTML = `<div class="spinner"></div> Sauvegarde…`;
   btn.disabled  = true;
 
@@ -135,9 +216,16 @@ async function saveConv() {
   });
 
   if (r?.notion_page_id) S.convPageId = r.notion_page_id;
-  S.convOrigText = text;
-  btn.innerHTML  = r?.success ? `${icon('check')} Sauvegardé` : `${icon('alert')} Erreur`;
-  setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; }, 2000);
+
+  if (r?.success) {
+    S.convOrigText = text;
+    btn.innerHTML  = `${icon('check')} Sauvegardé`;
+  } else {
+    btn.innerHTML  = `${icon('alert')} ${esc(r?.error || 'Erreur')}`;
+    btn.title      = r?.error || '';
+    console.warn('[POF] upsert_conv failed:', r);
+  }
+  setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; btn.title=''; }, 2500);
 }
 
 function resetConv() {
@@ -222,53 +310,20 @@ async function renderMain(person, notionData) {
             <div class="person-name">${esc(person.name)}</div>
             <div class="person-email">${esc(person.email)}</div>
           </div>
-          <span class="badge badge-loading" id="main-badge">…</span>
+          <span class="badge badge-missing" id="main-badge">${icon('x')} Non trouvé</span>
         </div>
-        <div class="search-status" id="folk-status">
-          <div class="spinner"></div><span>Recherche dans Folk…</span>
+        <div id="fallback-actions" class="action-row">
+          <button class="btn btn-primary" data-action="create-notion">
+            ${icon('plus')} Créer dans Notion
+          </button>
+          <a href="https://app.folk.app/contacts" target="_blank" class="btn btn-outline">
+            ${icon('external')} Chercher dans Folk
+          </a>
         </div>
-        <div id="fallback-actions" class="action-row"></div>
       </div>`;
 
-    const folkData = await lookupInFolk(person);
-    const badge    = document.getElementById('main-badge');
-    const folkSt   = document.getElementById('folk-status');
-    const actions  = document.getElementById('fallback-actions');
-    if (!badge) return;
-
-    folkSt.remove();
-
-    if (folkData?.found) {
-      if (folkData.notion_page_id) {
-        badge.className = 'badge badge-found';
-        badge.innerHTML = `${icon('check')} Folk + Notion`;
-        actions.innerHTML = `
-          <a href="${esc(notionHref(folkData.notion_page_id))}" target="_blank" class="btn btn-outline btn-block">
-            ${icon('external')} Ouvrir dans Notion
-          </a>`;
-      } else {
-        badge.className = 'badge badge-folk';
-        badge.innerHTML = `${icon('alert')} Folk uniquement`;
-        actions.innerHTML = `
-          <button class="btn btn-primary btn-block" data-action="create-notion">
-            ${icon('plus')} Créer la fiche Notion
-          </button>`;
-        actions.querySelector('[data-action="create-notion"]')
-          .addEventListener('click', e => doCreateNotion(e, person));
-      }
-    } else {
-      badge.className = 'badge badge-missing';
-      badge.innerHTML = `${icon('x')} Non trouvé`;
-      actions.innerHTML = `
-        <button class="btn btn-primary" data-action="create-notion">
-          ${icon('plus')} Créer dans Notion
-        </button>
-        <a href="https://app.folk.app/contacts" target="_blank" class="btn btn-outline">
-          ${icon('external')} Folk
-        </a>`;
-      actions.querySelector('[data-action="create-notion"]')
-        .addEventListener('click', e => doCreateNotion(e, person));
-    }
+    container.querySelector('[data-action="create-notion"]')
+      .addEventListener('click', e => doCreateNotion(e, person));
   }
 }
 
@@ -284,8 +339,18 @@ async function savePersonInstructions(pageId) {
   btn.innerHTML = `<div class="spinner"></div> Sauvegarde…`;
   btn.disabled  = true;
   const r = await updatePersonInstructions(pageId, ta.value);
-  btn.innerHTML = r?.success ? `${icon('check')} Sauvegardé` : `${icon('alert')} Erreur`;
-  setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; }, 2000);
+  if (r?.success) {
+    btn.innerHTML = `${icon('check')} Sauvegardé`;
+    // Invalide le cache local : la valeur a changé en base
+    sessionStorage.removeItem(INDEX_CACHE_KEY);
+    S.personIndex = null;
+    ensureIndex().catch(() => {});
+  } else {
+    btn.innerHTML = `${icon('alert')} ${esc(r?.error || 'Erreur')}`;
+    btn.title     = r?.error || '';
+    console.warn('[POF] update_person_instructions failed:', r);
+  }
+  setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; btn.title=''; }, 2500);
 }
 
 async function doCreateNotion(ev, person) {
@@ -304,8 +369,13 @@ async function doCreateNotion(ev, person) {
       <a href="${esc(url)}" target="_blank" class="btn btn-outline btn-block">
         ${icon('external')} Fiche créée — ouvrir
       </a>`;
+    // Invalide le cache local : nouvelle personne ajoutée
+    sessionStorage.removeItem(INDEX_CACHE_KEY);
+    S.personIndex = null;
+    ensureIndex().catch(() => {});
   } else {
-    btn.innerHTML = `${icon('alert')} Réessayer`;
+    btn.innerHTML = `${icon('alert')} ${esc(r?.error || 'Réessayer')}`;
+    btn.title     = r?.error || '';
     btn.disabled  = false;
   }
 }
@@ -357,10 +427,65 @@ function renderOthers(others, convToken) {
 }
 
 /* ════════════════════════════════════════════════════════
+   TÂCHES NOTION (onglet Tâche)
+   ════════════════════════════════════════════════════════ */
+async function renderTasksFor(convId) {
+  const pane = document.getElementById('pane-task');
+  pane.innerHTML = `
+    <div class="label">Tâches liées</div>
+    <div class="waiting">
+      <div class="spinner"></div>
+      <div class="msg">Chargement des tâches…</div>
+    </div>`;
+
+  const r = await listConvTasks(convId);
+  if (convId !== S.conversationId) return; // race guard
+
+  if (r?.error) {
+    pane.innerHTML = `
+      <div class="label">Tâches liées</div>
+      <div class="waiting">${icon('alert')}<div class="msg">Erreur : ${esc(r.error)}</div></div>`;
+    return;
+  }
+
+  const tasks = r?.tasks || [];
+  const convUrl = r?.conv_page_url;
+  if (!tasks.length) {
+    pane.innerHTML = `
+      <div class="label">Tâches liées</div>
+      <div class="waiting">
+        ${icon('taskBox')}
+        <div class="msg">Aucune tâche liée à cette conversation</div>
+        ${convUrl ? `<a href="${esc(convUrl)}" target="_blank" class="btn btn-outline" style="margin-top:8px">${icon('external')} Page conversation</a>` : ''}
+      </div>`;
+    return;
+  }
+
+  pane.innerHTML = `
+    <div class="label">Tâches liées (${tasks.length})</div>
+    <div id="tasks-list"></div>
+    ${convUrl ? `<a href="${esc(convUrl)}" target="_blank" class="btn btn-outline btn-block" style="margin-top:10px">${icon('external')} Ouvrir la conversation dans Notion</a>` : ''}`;
+  document.getElementById('tasks-list').innerHTML = tasks.map(t => `
+    <a href="${esc(t.url)}" target="_blank" class="card" style="display:block; text-decoration:none; color:inherit; margin-bottom:6px">
+      <div style="display:flex; align-items:center; gap:10px">
+        <div style="flex:1; min-width:0">
+          <div class="p-name">${esc(t.title)}</div>
+          ${t.status ? `<div class="p-email" style="margin-top:2px">${esc(t.status)}</div>` : ''}
+        </div>
+        <span class="p-arrow" style="opacity:1">${icon('external')}</span>
+      </div>
+    </a>`).join('');
+}
+
+/* ════════════════════════════════════════════════════════
    MISSIVE SDK ENTRY
    ════════════════════════════════════════════════════════ */
 function bootMissive() {
   if (!window.Missive) return;
+
+  // Pré-chargement asynchrone de l'index Personnes (fire and forget)
+  ensureIndex().catch(e => console.warn('[POF] index preload failed:', e));
+
   Missive.on('conversation', async function(id, { conversation }) {
     if (id === S.conversationId) return;
     S.conversationId = id;
@@ -379,6 +504,11 @@ function bootMissive() {
     renderMainLoading(main);
     renderOthers(others, id);
     loadConvInstructions(id);
+    renderTasksFor(id);
+
+    // Attend l'index (instantané si déjà chargé/caché) puis match local
+    await ensureIndex();
+    if (id !== S.conversationId) return;
 
     const notionData = await lookupInNotion(main);
     if (id !== S.conversationId) return;
