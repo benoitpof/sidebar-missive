@@ -42,7 +42,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.5' };       break;
+      case 'ping':                       result = { ok: true, version: '1.6' };       break;
       case 'dump_persons':               result = handleDumpPersons_(body);           break;
       case 'lookup_person':              result = handleLookupPerson_(body);          break;
       case 'create_person':              result = handleCreatePerson_(body);          break;
@@ -53,12 +53,12 @@ function doPost(e) {
       case 'list_tasks':                 result = handleListTasks_(body);             break;
       case 'create_task':                result = handleCreateTask_(body);            break;
       case 'toggle_task':                result = handleToggleTask_(body);            break;
-      case 'brief_podcast':              result = handleQueueAgentTask_(body, 'brief_podcast');        break;
-      case 'add_to_watch':               result = handleQueueAgentTask_(body, 'add_to_watch');         break;
+      case 'brief_podcast':              result = handleBriefPodcast_(body);          break;
+      case 'add_to_watch':               result = handleAddToWatch_(body);            break;
+      case 'enrich_contact':             result = handleEnrichContact_(body);         break;
+      case 'brief_reply':                result = handleBriefReply_(body);            break;
       case 'estimate_opportunity':       result = handleQueueAgentTask_(body, 'estimate_opportunity'); break;
-      case 'brief_reply':                result = handleQueueAgentTask_(body, 'brief_reply');          break;
       case 'send_nda':                   result = handleQueueAgentTask_(body, 'send_nda');             break;
-      case 'enrich_contact':             result = handleQueueAgentTask_(body, 'enrich_contact');       break;
       case 'lookup_folk':                result = handleLookupFolk_(body);            break;
       default:                           return json_({ error: 'unknown action: ' + action });
     }
@@ -69,7 +69,176 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.5' });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.6' });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ACTIONS DIRECTES (sans Backlog)
+   ═══════════════════════════════════════════════════════════════ */
+
+const PODCAST_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/13566922/uwyi8u9/';
+
+/** Append helper : ajoute une ligne au rich_text existant (max 2000 chars). */
+function appendToRichText_(pageId, propName, addition) {
+  var page = notionFetch_('GET', '/pages/' + pageId, null);
+  var existing = (page.properties[propName] && page.properties[propName].rich_text) || [];
+  var current = richTextValue_(existing);
+  var stamped = '[' + new Date().toISOString().slice(0, 10) + '] ' + addition;
+  var next = current ? (current + '\n\n' + stamped) : stamped;
+  if (next.length > 1990) next = next.slice(-1990); // garde la fin si overflow
+
+  var properties = {};
+  properties[propName] = { rich_text: [{ text: { content: next } }] };
+  notionFetch_('PATCH', '/pages/' + pageId, { properties: properties });
+  return next;
+}
+
+/** Retrouve la page Personnes via page_id direct, puis email, puis fallback nom. */
+function resolveContactPageId_(body) {
+  if (body.contact_page_id) return body.contact_page_id;
+  var dbId = cfg_('NOTION_PERSONS_DB');
+  var email = String(body.contact_email || '').toLowerCase();
+  var name  = String(body.contact_name || '').trim();
+  if (email) {
+    var emailProp = cfg_('PERSON_EMAIL_PROP') || 'E-mail';
+    var r1 = notionFetch_('POST', '/databases/' + dbId + '/query', {
+      filter: { property: emailProp, email: { equals: email } }, page_size: 1
+    });
+    if (r1.results && r1.results.length) return r1.results[0].id;
+  }
+  if (name) {
+    var r2 = notionFetch_('POST', '/databases/' + dbId + '/query', {
+      filter: { property: 'Nom', title: { contains: name } }, page_size: 1
+    });
+    if (r2.results && r2.results.length) return r2.results[0].id;
+  }
+  return null;
+}
+
+/* ─── brief_podcast : appel direct webhook (avec génération IA) ── */
+
+function handleBriefPodcast_(body) {
+  var convId = String(body.conversation_id || '');
+  if (!convId) return { success: false, error: 'conversation_id required' };
+
+  // Construit le contexte à partir de ce que le frontend passe
+  var subject = String(body.subject || '');
+  var mainName = (body.main && body.main.name) || '';
+  var mainEmail = (body.main && body.main.email) || '';
+  var othersList = (body.others || []).map(function (p) { return p.name || p.email; }).join(', ');
+  var personInstr = String(body.person_instructions || '');
+  var convInstr   = String(body.conv_instructions || '');
+
+  var apiKey = getSecret_('ANTROPIC_API_TOKEN');
+
+  var system = 'Tu es un assistant exécutif POF qui rédige des briefings audio. Voix : Impact Realist - assertif, pragmatique, technique sans jargon, sans filler. Pas d em-dashes. Démarre direct sur l enjeu, sans préambule. Adresse Benoit en "tu". Chiffres en toutes lettres. 400 à 600 mots. Format briefing exécutif.';
+
+  var prompt = 'Génère un briefing audio sur cette conversation Missive pour que Benoit comprenne où ça en est sur son trajet vélo.\n\n' +
+    'Contact principal : ' + mainName + ' (' + mainEmail + ')\n' +
+    (subject ? 'Sujet : ' + subject + '\n' : '') +
+    (othersList ? 'Autres participants : ' + othersList + '\n' : '') +
+    (personInstr ? '\nInstructions personne (Notion) :\n' + personInstr + '\n' : '') +
+    (convInstr ? '\nInstructions conversation (Notion) :\n' + convInstr + '\n' : '') +
+    '\nConversation Missive ID : ' + convId + '\n' +
+    '\nSi tu n as pas le contenu exact des derniers échanges, contextualise à partir des instructions Notion ci-dessus et indique clairement à Benoit quels points lui restent à confirmer. Évite d inventer des chiffres ou des dates non fournis.';
+
+  var claudeRes = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01'
+    },
+    payload: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 1500,
+      system: system,
+      messages: [{ role: 'user', content: prompt }]
+    }),
+    muteHttpExceptions: true
+  });
+  if (claudeRes.getResponseCode() !== 200) {
+    return { success: false, error: 'Anthropic ' + claudeRes.getResponseCode() };
+  }
+  var data = JSON.parse(claudeRes.getContentText());
+  var textBlock = (data.content || []).filter(function (b) { return b.type === 'text'; })[0];
+  var text = textBlock ? textBlock.text : '';
+  if (!text) return { success: false, error: 'empty Anthropic response' };
+
+  // POST direct au webhook Zapier qui pilote ElevenLabs
+  var hookRes = UrlFetchApp.fetch(PODCAST_WEBHOOK, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ Texte_a_lire: text }),
+    muteHttpExceptions: true
+  });
+  if (hookRes.getResponseCode() < 200 || hookRes.getResponseCode() >= 300) {
+    return { success: false, error: 'webhook ' + hookRes.getResponseCode(), preview: text.slice(0, 200) };
+  }
+
+  return { success: true, preview: text.slice(0, 300) };
+}
+
+/* ─── add_to_watch : append à "Briefing veille" du contact ─── */
+
+function handleAddToWatch_(body) {
+  var convId = String(body.conversation_id || '');
+  var category = String(body.category || '');
+  if (!convId)   return { success: false, error: 'conversation_id required' };
+  if (!category) return { success: false, error: 'category required' };
+
+  var pageId = resolveContactPageId_(body);
+  if (!pageId) return { success: false, error: 'contact non identifié dans Notion (ni contact_page_id ni email matché)' };
+
+  // Map category -> Type de veille (multi_select)
+  var typeMap = { 'concurrents': 'Conccurent', 'strategiques': 'Strat.', 'appels-a-projets': 'Financement' };
+  var typeVeille = typeMap[category] || null;
+
+  var line = 'Catégorie : ' + category + ' (conv Missive ' + convId.slice(0, 12) + ')';
+  appendToRichText_(pageId, 'Briefing veille', line);
+
+  // Set Suivi veille = true + ajoute le Type de veille si dispo
+  var patch = { properties: { 'Suivi veille': { checkbox: true } } };
+  if (typeVeille) {
+    var page = notionFetch_('GET', '/pages/' + pageId, null);
+    var existingType = (page.properties['Type de veille'] && page.properties['Type de veille'].multi_select) || [];
+    var names = existingType.map(function (o) { return o.name; });
+    if (names.indexOf(typeVeille) === -1) names.push(typeVeille);
+    patch.properties['Type de veille'] = { multi_select: names.map(function (n) { return { name: n }; }) };
+  }
+  notionFetch_('PATCH', '/pages/' + pageId, patch);
+
+  return { success: true, contact_page_id: pageId, category: category };
+}
+
+/* ─── enrich_contact : append instructions à "Briefing veille" ─── */
+
+function handleEnrichContact_(body) {
+  var convId = String(body.conversation_id || '');
+  var instructions = String(body.instructions || '').trim();
+  if (!convId)         return { success: false, error: 'conversation_id required' };
+  if (!instructions)   return { success: false, error: 'instructions required' };
+
+  var pageId = resolveContactPageId_(body);
+  if (!pageId) return { success: false, error: 'contact non identifié dans Notion' };
+
+  var line = 'Enrichir : ' + instructions + ' (conv ' + convId.slice(0, 12) + ')';
+  appendToRichText_(pageId, 'Briefing veille', line);
+  return { success: true, contact_page_id: pageId };
+}
+
+/* ─── brief_reply : append instructions à "Instruction spécifique" de la conv ─── */
+
+function handleBriefReply_(body) {
+  var convId = String(body.conversation_id || '');
+  var instructions = String(body.instructions || '').trim();
+  if (!convId)       return { success: false, error: 'conversation_id required' };
+  if (!instructions) return { success: false, error: 'instructions required' };
+
+  var pageId = ensureConvPage_(convId);
+  var instrProp = cfg_('CONV_INSTRUCTIONS_PROP') || 'Instruction spécifique';
+  appendToRichText_(pageId, instrProp, 'Brief réponse : ' + instructions);
+  return { success: true, conv_page_id: pageId };
 }
 
 /* ═══════════════════════════════════════════════════════════════

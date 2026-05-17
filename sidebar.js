@@ -52,10 +52,12 @@ const S = {
   participants:   [],
   main:           null,
   others:         [],
+  mainNotion:     null,  // dernier résultat lookup_person pour S.main
   convPageId:     null,
   convOrigText:   '',
-  personIndex:    null,  // Map<email, person>
-  indexLoading:   null,  // Promise<Map>
+  convSubject:    '',
+  personIndex:    null,
+  indexLoading:   null,
 };
 
 /* ════════════════════════════════════════════════════════
@@ -500,10 +502,15 @@ function bootMissive() {
     loadConvInstructions(id);
     loadTasks(id);
 
+    // Tente d'extraire le subject de la conversation pour le brief podcast
+    const msg = conversation?.latest_message || conversation?.messages?.[0];
+    S.convSubject = msg?.subject || conversation?.subject || '';
+
     await ensureIndex();
     if (id !== S.conversationId) return;
     const notionData = await lookupInNotion(S.main);
     if (id !== S.conversationId) return;
+    S.mainNotion = notionData;
     renderMain(S.main, notionData);
   });
 }
@@ -558,20 +565,29 @@ function togglePanel(triggerSel, panelId) {
    TASK ACTIONS
    ════════════════════════════════════════════════════════ */
 function setupTaskActions() {
-  // Briefing podcast — one-shot action
+  // Briefing podcast — appel direct webhook avec contexte
   const briefBtn = document.querySelector('[data-action="brief-podcast"]');
   if (briefBtn) briefBtn.addEventListener('click', async () => {
+    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
     flashRow(briefBtn);
-    const r = await callProxy('brief_podcast', { conversation_id: S.conversationId });
-    toast(r?.success || r === undefined || true ? 'Briefing podcast lancé' : 'Erreur');
+    const r = await callProxy('brief_podcast', {
+      conversation_id: S.conversationId,
+      subject: S.convSubject || '',
+      main:    S.main,
+      others:  S.others,
+      person_instructions: S.mainNotion?.person_instructions || '',
+      conv_instructions:   S.convOrigText || '',
+    });
+    toast(r?.success ? 'Briefing podcast envoyé' : (r?.error || 'Erreur'), r?.success ? 'success' : 'error');
   });
 
   // Estimer l'opportunité — one-shot
   const estBtn = document.querySelector('[data-action="estimate-opp"]');
   if (estBtn) estBtn.addEventListener('click', async () => {
+    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
     flashRow(estBtn);
     const r = await callProxy('estimate_opportunity', { conversation_id: S.conversationId });
-    toast('Estimation en cours — résultat en commentaire');
+    toast(r?.success ? 'Estimation en cours — résultat en commentaire' : (r?.error || 'Erreur'), r?.success ? 'success' : 'error');
   });
 
   // Toggle panels
@@ -585,30 +601,49 @@ function setupTaskActions() {
     setTimeout(prefillNdaForm, 0);
   });
 
-  // Watch chips
+  // Watch chips → écrit dans le champ Briefing veille du contact principal
   document.querySelectorAll('[data-watch]').forEach(chip => {
     chip.addEventListener('click', async () => {
+      if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+      if (!S.mainNotion?.notion_page_id && !S.main?.email) {
+        toast('Contact non identifié', 'error');
+        return;
+      }
       chip.classList.add('selected');
       const cat = chip.dataset.watch;
-      await callProxy('add_to_watch', { category: cat, conversation_id: S.conversationId });
-      toast(`Ajouté à la veille « ${chip.textContent.trim()} »`);
+      const r = await callProxy('add_to_watch', {
+        category: cat,
+        conversation_id: S.conversationId,
+        contact_page_id: S.mainNotion?.notion_page_id,
+        contact_email:   S.main?.email,
+        contact_name:    S.main?.name,
+      });
+      if (r?.success) toast(`Ajouté à la veille « ${chip.textContent.trim()} »`);
+      else            toast(r?.error || 'Erreur veille', 'error');
       setTimeout(() => chip.classList.remove('selected'), 1200);
     });
   });
 
-  // Brief reply submit
+  // Brief reply → append à Instruction spécifique de la conversation
   const replyBtn = document.getElementById('reply-submit');
   if (replyBtn) replyBtn.addEventListener('click', async () => {
     const ta = document.getElementById('reply-instructions');
     if (!ta.value.trim()) { ta.focus(); return; }
     replyBtn.disabled = true;
     replyBtn.innerHTML = `<div class="spinner"></div> Envoi…`;
-    await callProxy('brief_reply', { instructions: ta.value, conversation_id: S.conversationId });
+    const r = await callProxy('brief_reply', {
+      instructions: ta.value,
+      conversation_id: S.conversationId,
+    });
     replyBtn.disabled = false;
     replyBtn.innerHTML = 'Lancer';
-    ta.value = '';
-    document.querySelector('[data-action="brief-reply"]')?.click();
-    toast('Brief envoyé à l\'agent');
+    if (r?.success) {
+      ta.value = '';
+      document.querySelector('[data-action="brief-reply"]')?.click();
+      toast('Brief enregistré sur la conversation');
+    } else {
+      toast(r?.error || 'Erreur brief', 'error');
+    }
   });
 
   // NDA submit + validation
@@ -678,17 +713,25 @@ function setupEnrichContact() {
 
   if (submit) submit.addEventListener('click', async () => {
     const ta = document.getElementById('enrich-instructions');
+    if (!ta?.value.trim()) { ta?.focus(); return; }
     submit.disabled = true;
     submit.innerHTML = `<div class="spinner"></div> Lancement…`;
-    await callProxy('enrich_contact', {
+    const r = await callProxy('enrich_contact', {
       conversation_id: S.conversationId,
       instructions: ta?.value || '',
+      contact_page_id: S.mainNotion?.notion_page_id,
+      contact_email:   S.main?.email,
+      contact_name:    S.main?.name,
     });
     submit.disabled = false;
     submit.innerHTML = 'Lancer l\'enrichissement';
-    if (ta) ta.value = '';
-    btn.click();
-    toast('Enrichissement lancé');
+    if (r?.success) {
+      if (ta) ta.value = '';
+      btn.click();
+      toast('Briefing veille mis à jour');
+    } else {
+      toast(r?.error || 'Erreur enrichissement', 'error');
+    }
   });
 }
 
