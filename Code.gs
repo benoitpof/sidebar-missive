@@ -42,7 +42,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.7' };       break;
+      case 'ping':                       result = { ok: true, version: '1.8' };       break;
       case 'dump_persons':               result = handleDumpPersons_(body);           break;
       case 'lookup_person':              result = handleLookupPerson_(body);          break;
       case 'create_person':              result = handleCreatePerson_(body);          break;
@@ -63,6 +63,26 @@ function doPost(e) {
       case 'estimate_opportunity':       result = handleQueueAgentTask_(body, 'estimate_opportunity'); break;
       case 'send_nda':                   result = handleQueueAgentTask_(body, 'send_nda');             break;
       case 'lookup_folk':                result = handleLookupFolk_(body);            break;
+      // v1.8 — nouveaux endpoints sidebar v4
+      case 'analyze_content':            result = handleAnalyzeContent_(body);        break;
+      case 'brief_attachment':           result = handleBriefAttachment_(body);       break;
+      case 'follow_source':              result = handleFollowSource_(body);          break;
+      case 'list_timeline':              result = handleListTimeline_(body);          break;
+      case 'last_triage_report':         result = handleLastTriageReport_(body);      break;
+      case 'run_triage':                 result = handleRunTriage_(body);             break;
+      case 'submit_agent_feedback':      result = handleSubmitFeedback_(body, 'agent');  break;
+      case 'submit_rules_feedback':      result = handleSubmitFeedback_(body, 'rules');  break;
+      case 'add_field_to_notion':        result = handleAddFieldToNotion_(body);      break;
+      case 'update_task':                result = handleUpdateTask_(body);            break;
+      case 'update_situation':           result = handleUpdateSituation_(body);       break;
+      // Stubs : nécessitent une spec dédiée — voir Missive Sidebar Notion
+      case 'regen_situation':            result = { error: 'spec_in_progress', spec: 'agent' };  break;
+      case 'ask_agent':                  result = { reply: 'Agent contextuel à venir — voir spec en cours dans Missive Sidebar Notion.', proposed: [], spec: 'agent' }; break;
+      case 'signature_action':           result = handleSignatureAction_(body);       break;
+      // Alias quand le frontend écrase la routing key avec action: 'legal_analysis|sign_documents|generate_nda'
+      case 'legal_analysis':             result = handleSignatureAction_({ ...body, sub_action: 'legal_analysis' });  break;
+      case 'sign_documents':             result = handleSignatureAction_({ ...body, sub_action: 'sign_documents' });  break;
+      case 'generate_nda':               result = handleSignatureAction_({ ...body, sub_action: 'generate_nda' });    break;
       default:                           return json_({ error: 'unknown action: ' + action });
     }
     return json_(result);
@@ -72,7 +92,358 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.7' });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.8' });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v1.8 — TIMELINE, ANALYZE, TRIAGE, FEEDBACK, GENERIC PATCH
+   ═══════════════════════════════════════════════════════════════ */
+
+const NOTES_DB_ID    = '259c2ce245e880ba81ece0c55d926a80';
+const MOUS_DB_ID     = 'db667ae8-96a6-4e98-96be-306ab6a762d4';
+const FEEDBACK_DB_ID = '6a1cdf41-5aec-4377-9afb-02b4aa87ba6d';
+
+/* ─── analyze_content ──────────────────────────────────────── */
+/**
+ * Résumé IA + extraction de sources (LinkedIn, web) depuis le contexte conv.
+ * Pas d'accès au body Missive (pas de Missive API wiré ici) — l'IA travaille
+ * sur subject + person_instructions + conv_instructions + participants.
+ */
+function handleAnalyzeContent_(body) {
+  var convId = String(body.conversation_id || '');
+  if (!convId) return { summary: '', attachments: [], sources: [] };
+
+  var subject = String(body.subject || '');
+  var mainName = (body.main && body.main.name) || '';
+  var mainEmail = (body.main && body.main.email) || '';
+  var personInstr = String(body.person_instructions || '');
+  var convInstr   = String(body.conv_instructions || '');
+
+  // Pas d'info → réponse vide rapide, pas d'appel IA
+  if (!subject && !personInstr && !convInstr) {
+    return { summary: '', attachments: [], sources: [] };
+  }
+
+  var apiKey;
+  try { apiKey = getSecret_('ANTROPIC_API_TOKEN'); }
+  catch (_e) { return { summary: '', attachments: [], sources: [], error: 'no_anthropic_key' }; }
+
+  var system = 'Tu es un assistant qui résume une conversation Missive pour Benoit (CEO POF). ' +
+    'Réponds UNIQUEMENT en JSON valide, sans markdown : ' +
+    '{"summary":"résumé 2-3 phrases", "sources":[{"type":"linkedin|web|other", "url":"...", "label":"..."}]}. ' +
+    'Si tu n as pas d url évidente, sources = []. Le résumé doit pointer ce qui est actionnable.';
+
+  var prompt = 'Contact principal : ' + mainName + ' (' + mainEmail + ')\n' +
+    (subject ? 'Sujet : ' + subject + '\n' : '') +
+    (personInstr ? '\nInstructions Notion personne :\n' + personInstr + '\n' : '') +
+    (convInstr ? '\nInstructions Notion conv :\n' + convInstr + '\n' : '');
+
+  var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post', contentType: 'application/json',
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    payload: JSON.stringify({
+      model: ANTHROPIC_MODEL, max_tokens: 400, system: system,
+      messages: [{ role: 'user', content: prompt }]
+    }), muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) {
+    return { summary: '', attachments: [], sources: [], error: 'anthropic_' + res.getResponseCode() };
+  }
+  var data = JSON.parse(res.getContentText());
+  var textBlock = (data.content || []).filter(function (b) { return b.type === 'text'; })[0];
+  var parsed = parseJsonLoose_(textBlock ? textBlock.text : '');
+  return {
+    summary: (parsed && parsed.summary) || '',
+    attachments: [], // pas de Missive API ici
+    sources: (parsed && Array.isArray(parsed.sources)) ? parsed.sources : []
+  };
+}
+
+/* ─── brief_attachment (stub : besoin Missive API) ─────────── */
+function handleBriefAttachment_(_body) {
+  return { success: false, error: 'requires_missive_api', message: 'Analyse de PJ nécessite Missive API token côté GAS — non wiré pour cette itération.' };
+}
+
+/* ─── follow_source : ajoute à la veille du contact ────────── */
+function handleFollowSource_(body) {
+  // Mappe vers add_to_watch avec catégorie déduite
+  var source_type = String(body.source_type || '').toLowerCase();
+  var category = source_type === 'concurrent' ? 'concurrents'
+                : source_type === 'appel' ? 'appels-a-projets'
+                : 'strategiques';
+  return handleAddToWatch_({
+    category: category,
+    conversation_id: body.conversation_id,
+    contact_page_id: body.contact_page_id,
+    contact_email:   body.contact_email,
+    contact_name:    body.contact_name
+  });
+}
+
+/* ─── list_timeline : Notes + MOUs liés au contact ─────────── */
+function handleListTimeline_(body) {
+  var contactPageId = String(body.contact_page_id || '');
+  if (!contactPageId) return { situation: null, upcoming: [], interactions: [] };
+
+  var interactions = [];
+
+  // Fetch la page contact pour récupérer les relations Notes + MOUs
+  var page;
+  try { page = notionFetch_('GET', '/pages/' + contactPageId, null); }
+  catch (e) { return { situation: null, upcoming: [], interactions: [], error: String(e) }; }
+  var props = page.properties || {};
+
+  // 1. Notes liées (relation "Notes")
+  var notesRel = (props['Notes'] && props['Notes'].relation) || [];
+  for (var i = 0; i < Math.min(notesRel.length, 20); i++) {
+    try {
+      var p = notionFetch_('GET', '/pages/' + notesRel[i].id, null);
+      var nprops = p.properties || {};
+      var title = '', type = '', summary = '', date = p.last_edited_time || p.created_time || '';
+      for (var k in nprops) {
+        if (nprops[k].type === 'title') title = richTextValue_(nprops[k].title || []);
+        if (k.toLowerCase() === 'type' && nprops[k].select && nprops[k].select.name) type = nprops[k].select.name;
+        if (k.toLowerCase() === 'type' && nprops[k].rich_text) type = richTextValue_(nprops[k].rich_text);
+        if (k.toLowerCase() === 'contenu' && nprops[k].rich_text) summary = richTextValue_(nprops[k].rich_text);
+        if (nprops[k].type === 'date' && nprops[k].date && nprops[k].date.start) date = nprops[k].date.start;
+      }
+      interactions.push({
+        kind: 'note',
+        type: type || 'note',
+        title: title || '(sans titre)',
+        summary: summary,
+        date: (date || '').slice(0, 10),
+        url: p.url || notionPageUrl_(p.id)
+      });
+    } catch (_e) {}
+  }
+
+  // 2. MOUs liés (relation "Inventaire MOUs et Partenariats")
+  var mousRel = (props['Inventaire MOUs et Partenariats'] && props['Inventaire MOUs et Partenariats'].relation) || [];
+  for (var j = 0; j < Math.min(mousRel.length, 20); j++) {
+    try {
+      var m = notionFetch_('GET', '/pages/' + mousRel[j].id, null);
+      var mprops = m.properties || {};
+      var docName = (mprops['Document Name'] && mprops['Document Name'].title) || [];
+      var resume = (mprops['Résumé du document'] && mprops['Résumé du document'].rich_text) || [];
+      var status = (mprops['Status'] && mprops['Status'].select && mprops['Status'].select.name) || '';
+      var modDate = (mprops['Date de Modification'] && mprops['Date de Modification'].date && mprops['Date de Modification'].date.start) || '';
+      var creaDate = (mprops['Date de Création'] && mprops['Date de Création'].date && mprops['Date de Création'].date.start) || '';
+      var bestDate = modDate || creaDate || m.last_edited_time || m.created_time || '';
+      interactions.push({
+        kind: 'document',
+        type: 'MOU / Contrat',
+        title: richTextValue_(docName) || '(sans titre)',
+        summary: richTextValue_(resume),
+        status: status,
+        date: (bestDate || '').slice(0, 10),
+        url: m.url || notionPageUrl_(m.id)
+      });
+    } catch (_e) {}
+  }
+
+  // Trie par date desc
+  interactions.sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
+
+  return {
+    situation: null,  // alimenté par update_situation
+    upcoming: [],     // v2 : à wirer plus tard
+    interactions: interactions
+  };
+}
+
+/* ─── last_triage_report ─────────────────────────────────────── */
+function handleLastTriageReport_(_body) {
+  try {
+    var resp = notionFetch_('POST', '/databases/' + TASKS_DB_ID + '/query', {
+      filter: { property: 'Tags', multi_select: { contains: 'daily-mail-triage' } },
+      sorts: [{ property: 'Date de création', direction: 'descending' }],
+      page_size: 1
+    });
+    if (!resp.results || !resp.results.length) return { found: false };
+    var page = resp.results[0];
+    var title = (page.properties[TASKS_TITLE_PROP] && page.properties[TASKS_TITLE_PROP].title) || [];
+    // Stats : parsées depuis le champ Logs si présent
+    var logs = (page.properties['Logs'] && page.properties['Logs'].rich_text) || [];
+    var logsText = richTextValue_(logs);
+    var stats = { triaged: null, archived: null, prio1: null };
+    var m1 = logsText.match(/(\d+)\s+tri[ée]s?/i);  if (m1) stats.triaged  = parseInt(m1[1], 10);
+    var m2 = logsText.match(/(\d+)\s+archiv/i);     if (m2) stats.archived = parseInt(m2[1], 10);
+    var m3 = logsText.match(/(\d+)\s+(?:prio\s*1|P1)/i); if (m3) stats.prio1 = parseInt(m3[1], 10);
+    return {
+      found: true,
+      title: richTextValue_(title),
+      stats: stats,
+      run_at: page.created_time,
+      url: page.url || notionPageUrl_(page.id)
+    };
+  } catch (e) {
+    return { found: false, error: String(e && e.message || e) };
+  }
+}
+
+/* ─── run_triage : crée une tâche Backlog manuelle ─────────── */
+function handleRunTriage_(_body) {
+  var properties = {};
+  properties[TASKS_TITLE_PROP] = { title: [{ text: { content: 'Lancer daily-mail-triage (hors planning)' } }] };
+  properties['Type d\'action'] = { select: { name: 'Mail' } };
+  properties['Mode']    = { select: { name: "Confier à l'IA" } };
+  properties['Etat']    = { status: { name: 'A faire' } };
+  properties['Priorité']= { select: { name: 'Prio 2' } };
+  properties['Tags']    = { multi_select: [{ name: 'daily-mail-triage' }] };
+  properties['Prompt']  = { rich_text: [{ text: { content: 'Lance un cycle complet de daily-mail-triage maintenant. Déclenché depuis la sidebar Missive (Empty Shell). Reprise par execute-task-backlog au prochain cron.' } }] };
+  var task = notionFetch_('POST', '/pages', {
+    parent: { database_id: TASKS_DB_ID }, properties: properties
+  });
+  return {
+    queued: true,
+    task_id: task.id,
+    task_url: task.url || notionPageUrl_(task.id)
+  };
+}
+
+/* ─── submit_*_feedback : insert dans Feedback Atomic ────────── */
+function handleSubmitFeedback_(body, kind) {
+  var title = String(body.title || body.message || '(feedback sans titre)').slice(0, 200);
+  var text  = String(body.text || body.message || '');
+  var severity = String(body.severity || 'medium');
+  var domain = kind === 'rules' ? 'Workflow' : 'Skill';
+  var type = String(body.type || 'improvement'); // bug | improvement | friction | rex
+
+  var properties = {
+    'Titre': { title: [{ text: { content: title } }] },
+    'Domain': { select: { name: domain } },
+    'Type':   { select: { name: type } },
+    'Severity': { select: { name: severity } },
+    'Status': { status: { name: 'Pas commencé' } }
+  };
+  if (text) properties['Demande utilisateur'] = { rich_text: [{ text: { content: text.slice(0, 1900) } }] };
+  if (body.conversation_id) properties['Context'] = { url: 'https://mail.missiveapp.com/#inbox/conversations/' + body.conversation_id };
+
+  var page = notionFetch_('POST', '/pages', {
+    parent: { data_source_id: FEEDBACK_DB_ID }, properties: properties
+  });
+  return { success: true, feedback_id: page.id, url: page.url || notionPageUrl_(page.id) };
+}
+
+/* ─── add_field_to_notion : PATCH générique (whitelist) ─────── */
+const ADD_FIELD_WHITELIST = {
+  'Société': 'rich_text',
+  'Nom de domaine': 'rich_text',
+  'Description': 'rich_text',
+  'Lien Folk': 'url',
+  'ID folk': 'rich_text',
+  'Téléphone': 'phone_number',
+  'E-mail': 'email'
+};
+function handleAddFieldToNotion_(body) {
+  var pageId = String(body.page_id || '');
+  var field = String(body.field || '');
+  var value = body.value;
+  if (!pageId) return { success: false, error: 'page_id required' };
+  var kind = ADD_FIELD_WHITELIST[field];
+  if (!kind) return { success: false, error: 'field_not_whitelisted: ' + field };
+
+  var prop = {};
+  if (kind === 'rich_text')       prop[field] = { rich_text: [{ text: { content: String(value || '') } }] };
+  else if (kind === 'phone_number') prop[field] = { phone_number: String(value || '') };
+  else if (kind === 'email')      prop[field] = { email: String(value || '') };
+  else if (kind === 'url')        prop[field] = { url: String(value || '') };
+
+  notionFetch_('PATCH', '/pages/' + pageId, { properties: prop });
+  return { success: true };
+}
+
+/* ─── update_task : PATCH sur Tasks Backlog ────────────────── */
+function handleUpdateTask_(body) {
+  var id = String(body.id || '');
+  if (!id) return { success: false, error: 'id required' };
+  var properties = {};
+  if (body.name)     properties[TASKS_TITLE_PROP] = { title: [{ text: { content: String(body.name) } }] };
+  if (body.deadline) properties['Due'] = { date: { start: String(body.deadline) } };
+  if (body.prio)     properties['Priorité'] = { select: { name: priorityToNotion_(String(body.prio)) } };
+  if (body.assignee) properties['Mode'] = { select: { name: assigneeToMode_(String(body.assignee)) } };
+  if (typeof body.done === 'boolean') {
+    properties['Etat'] = { status: { name: body.done ? 'Terminé' : 'A faire' } };
+    properties['Done'] = body.done ? { date: { start: new Date().toISOString().slice(0, 10) } } : { date: null };
+  }
+  if (!Object.keys(properties).length) return { success: false, error: 'nothing_to_update' };
+  notionFetch_('PATCH', '/pages/' + id, { properties: properties });
+  return { success: true };
+}
+
+/* ─── update_situation : append à un champ Situation (Conv) ─── */
+function handleUpdateSituation_(body) {
+  var convId = String(body.conversation_id || '');
+  var text   = String(body.text || '').trim();
+  if (!convId) return { success: false, error: 'conversation_id required' };
+  if (!text)   return { success: false, error: 'text required' };
+  var pageId = ensureConvPage_(convId);
+  // Stocke dans le champ "Instruction spécifique" (champ texte existant) — la spec agent
+  // pourra introduire un champ dédié "Situation" si besoin
+  var prop = cfg_('CONV_INSTRUCTIONS_PROP') || 'Instruction spécifique';
+  appendToRichText_(pageId, prop, 'Situation : ' + text);
+  return { success: true, conv_page_id: pageId };
+}
+
+/* ─── signature_action : router vers la skill juridique ──────
+   Note : le frontend envoie {action: 'signature_action', action: 'legal_analysis'}
+   ce qui écrase la routing key. On accepte donc sub_action/kind/sig_action
+   en priorité, et fallback sur body.action si le switch nous a routés ici. */
+function handleSignatureAction_(body) {
+  var action = String(body.sub_action || body.kind || body.sig_action || body.action || '');
+  var convId = String(body.conversation_id || '');
+  var taskTitle = '';
+  var type = '';
+  var prompt = '';
+
+  if (action === 'legal_analysis') {
+    taskTitle = 'Analyser document juridique (sidebar) — conv ' + convId.slice(0, 12);
+    type = 'Recherche';
+    prompt = 'Analyse juridique sidebar : déléguer à legal-contract-analyzer.\nAttachments IDs : ' + JSON.stringify(body.attachment_ids || []) + '\nConv : ' + convId;
+  } else if (action === 'sign_documents') {
+    taskTitle = 'Lancer signature documents — conv ' + convId.slice(0, 12);
+    type = 'Autre';
+    prompt = 'Lancer signature Odoo Sign via odoo-sign-launcher.\nAttachments IDs : ' + JSON.stringify(body.attachment_ids || []) + '\nSignataire(s) : ' + JSON.stringify(body.signataires || body.main || {}) + '\nConv : ' + convId;
+  } else if (action === 'generate_nda') {
+    taskTitle = 'Générer NDA POF — ' + ((body.main && body.main.name) || convId.slice(0, 12));
+    type = 'Redaction';
+    prompt = 'Générer un NDA POF via mou-generator puis signer via odoo-sign-launcher.\nSignataire : ' + JSON.stringify(body.main || {}) + '\nSociété : ' + (body.societe || '') + '\nConv : ' + convId + '\n[NB] Spec en cours : voir Notion Missive Sidebar > Spec juridique.';
+  } else {
+    return { success: false, error: 'unknown_signature_action: ' + action };
+  }
+
+  var properties = {};
+  properties[TASKS_TITLE_PROP] = { title: [{ text: { content: taskTitle } }] };
+  properties['Type d\'action'] = { select: { name: type } };
+  properties['Mode']    = { select: { name: "Confier à l'IA" } };
+  properties['Etat']    = { status: { name: 'A faire' } };
+  properties['Priorité']= { select: { name: 'Prio 2' } };
+  properties['Tags']    = { multi_select: [{ name: 'sidebar-legal' }] };
+  properties['Prompt']  = { rich_text: [{ text: { content: prompt.slice(0, 1900) } }] };
+
+  var task = notionFetch_('POST', '/pages', {
+    parent: { database_id: TASKS_DB_ID }, properties: properties
+  });
+
+  // Lien à la conversation
+  try {
+    var convPageId = ensureConvPage_(convId);
+    var convPage = notionFetch_('GET', '/pages/' + convPageId, null);
+    var existing = (convPage.properties['Tâche associée'] && convPage.properties['Tâche associée'].relation) || [];
+    existing.push({ id: task.id });
+    notionFetch_('PATCH', '/pages/' + convPageId, {
+      properties: { 'Tâche associée': { relation: existing } }
+    });
+  } catch (_e) {}
+
+  return {
+    success: true,
+    queued: true,
+    requires_spec: 'legal',
+    task_id: task.id,
+    task_url: task.url || notionPageUrl_(task.id)
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════

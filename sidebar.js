@@ -43,6 +43,14 @@ const ICON = {
   videoCam:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4z"/><path d="M3 6m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"/></svg>`,
   trash:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg>`,
   wand:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21l15 -15l-3 -3l-15 15l3 3"/><path d="M15 6l3 3"/><path d="M9 3a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/><path d="M19 13a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/></svg>`,
+  pin:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v6l-2 4v2h10v-2l-2 -4v-6"/><path d="M12 16l0 5"/><path d="M8 4l8 0"/></svg>`,
+  refresh:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/></svg>`,
+  mail:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z"/><path d="M3 7l9 6l9 -6"/></svg>`,
+  arrowUR:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7l-10 10"/><path d="M8 7h9v9"/></svg>`,
+  alertCircle:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>`,
+  checks:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12l5 5l10 -10"/><path d="M2 12l5 5m5 -5l5 -5"/></svg>`,
+  signature: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3.333 -3.333 5 -6 5 -8c0 -3 -1 -3 -2 -3s-2.032 1.085 -2 3c.034 2.048 1.658 3.877 2.5 5c1.5 2 2.5 2.5 3.5 1l2 -3c.667 1.333 1.667 3.333 3 3h3"/><path d="M18 16l3 -1l-2 3"/></svg>`,
+  gavel:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10l7.383 7.418c.823 .82 .823 2.148 0 2.967a2.11 2.11 0 0 1 -2.976 0l-7.407 -7.385"/><path d="M6 9l4 4"/><path d="M13 10l-4 -4"/><path d="M3 21h7"/><path d="M6.793 15.793l-3.586 -3.586a1 1 0 0 1 0 -1.414l2.293 -2.293l.5 .5l3 -3l-.5 -.5l2.293 -2.293a1 1 0 0 1 1.414 0l3.586 3.586a1 1 0 0 1 0 1.414l-2.293 2.293l-.5 -.5l-3 3l.5 .5l-2.293 2.293a1 1 0 0 1 -1.414 0z"/></svg>`,
 };
 
 function icon(name) { return ICON[name] || ''; }
@@ -139,6 +147,9 @@ function lookupLocal(person) {
     // Champs enrichis (préservés s'ils existent dans le dump)
     vip:        hit.vip || false,
     company:    hit.company || '',
+    company_source: hit.company_source || (hit.company ? 'notion' : 'none'),
+    title:      hit.title || '',
+    title_source:   hit.title_source || (hit.title ? 'notion' : 'none'),
     tags:       hit.tags || [],
     phone:      hit.phone || '',
     phone_source: hit.phone_source || (hit.phone ? 'notion' : 'none'),
@@ -183,7 +194,7 @@ function notionHref(pageId) {
    reads the same way across the whole sidebar. */
 function notionPill(href, { label = 'Notion', title = 'Ouvrir dans Notion' } = {}) {
   const arrow = `<svg class="pill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>`;
-  return `<a class="notion-pill" href="${esc(href || '#')}" target="_blank" rel="noopener" title="${esc(title)}" aria-label="${esc(title)}">${icon('notion')}<span>${esc(label)}</span>${arrow}</a>`;
+  return `<a class="notion-pill" href="${esc(href || '#')}" target="_blank" rel="noopener" title="${esc(title)}" aria-label="${esc(title)}"><span>${esc(label)}</span>${arrow}</a>`;
 }
 
 /* ════════════════════════════════════════════════════════
@@ -205,41 +216,40 @@ async function callProxy(action, args = {}) {
   }
 }
 
-// Lookup local-first : utilise l'index cache. Fallback proxy si pas trouvé.
+// Lookup local-first : utilise l'index cache. Fallback proxy uniquement
+// si l'index n'est pas encore chargé OU si pas trouvé localement.
 async function lookupInNotion(p) {
   await ensureIndex();
   const local = lookupLocal(p);
   if (local) return local;
-  // Fallback proxy : tente une recherche serveur (email + nom)
+  // Fallback proxy direct
   return callProxy('lookup_person', { email: p.email, name: p.name });
 }
 
-// Pour le main contact : lance en parallèle un enrichissement (meetings)
-// qui re-render quand prêt. Retourne le local match instant.
+// Pour le main contact : enrichit en background (meetings + données fraîches)
 async function enrichMainAsync(p) {
   try {
     const r = await callProxy('lookup_person', { email: p.email, name: p.name, with_meetings: true });
     if (!r?.found) return;
-    if (S.main !== p) return; // user a changé de conv entre-temps
+    if (S.main !== p) return; // user a changé de conv
     S.mainNotion = { ...(S.mainNotion || {}), ...r };
     renderMain(S.main, S.mainNotion);
   } catch (e) { console.warn('[POF] enrichMainAsync failed:', e); }
 }
 
-// Lookup pour les participants secondaires : LOCAL UNIQUEMENT.
-// Pas de roundtrip serveur pour éviter d'attendre N×5s sur tous les autres.
+// Pour les autres participants : LOCAL UNIQUEMENT (pas de roundtrip serveur)
 async function lookupParticipantInNotion(p) {
   await ensureIndex();
   return lookupLocal(p) || { found: false };
 }
 
-// Folk silent : cache sessionStorage par email, pas de UI spinner.
+// Folk silencieux : cache sessionStorage, pas de UI spinner bloquant
 const FOLK_CACHE_KEY = 'pof_folk_v1';
 const FOLK_TTL_MS = 30 * 60 * 1000;
 function getFolkCache() {
   try { return JSON.parse(sessionStorage.getItem(FOLK_CACHE_KEY) || '{}'); } catch { return {}; }
 }
-function setFolkCache(email, data) {
+function setFolkCacheItem(email, data) {
   const c = getFolkCache();
   c[email] = { ts: Date.now(), data };
   try { sessionStorage.setItem(FOLK_CACHE_KEY, JSON.stringify(c)); } catch {}
@@ -250,7 +260,7 @@ async function lookupFolkSilent(p) {
   const hit = getFolkCache()[email];
   if (hit && Date.now() - hit.ts < FOLK_TTL_MS) return hit.data;
   const r = await callProxy('lookup_folk', { email: p.email, name: p.name });
-  setFolkCache(email, r);
+  setFolkCacheItem(email, r);
   return r;
 }
 const lookupInFolk                = lookupFolkSilent;
@@ -388,7 +398,115 @@ function renderNoContact() {
       <div class="msg">Aucun contact identifié dans cette conversation</div>
     </div>`;
   document.getElementById('others-section').style.display = 'none';
+  showEmptyShell();
 }
+
+/* ════════════════════════════════════════════════════════
+   EMPTY SHELL — no conversation selected
+   ════════════════════════════════════════════════════════ */
+function showEmptyShell() {
+  document.body.classList.add('no-conversation');
+  const shell = document.getElementById('empty-shell');
+  if (shell) shell.removeAttribute('hidden');
+  loadLastTriageReport();
+}
+function hideEmptyShell() {
+  document.body.classList.remove('no-conversation');
+  const shell = document.getElementById('empty-shell');
+  if (shell) shell.setAttribute('hidden', '');
+}
+
+async function loadLastTriageReport() {
+  const wrap = document.getElementById('es-report-wrap');
+  if (!wrap) return;
+  const r = await callProxy('last_triage_report', {});
+  if (!r || r.found === false) {
+    wrap.innerHTML = `
+      <div class="label es-report-label">
+        <span class="label-with-icon">
+          <svg style="width:11px;height:11px;vertical-align:-1px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M12 7v5l3 3"/></svg>
+          Dernier triage
+        </span>
+      </div>
+      <div class="es-report-empty" style="font-size:11.5px;color:var(--text-xmuted);padding:10px 4px;border:1px dashed var(--border);border-radius:var(--r-md);text-align:center">
+        Aucun rapport pour l'instant.
+      </div>`;
+    return;
+  }
+  const card  = document.getElementById('es-report-card');
+  const url   = r.notion_page_url || notionHref(r.notion_page_id);
+  if (card) card.setAttribute('href', url);
+
+  const name = document.getElementById('es-report-name');
+  if (name) name.textContent = r.title || 'Dernier rapport de triage';
+
+  const date = document.getElementById('es-report-date');
+  if (date) date.querySelector('span').textContent = r.run_at_label || formatTriageDate(r.run_at);
+
+  const stats = r.stats || {};
+  const set = (id, v) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (id === 'es-stat-prio') {
+      el.querySelector('span:last-child').textContent = (v ?? 0);
+    } else {
+      el.textContent = (v ?? 0);
+    }
+  };
+  set('es-stat-tries', stats.triaged);
+  set('es-stat-arch',  stats.archived);
+  set('es-stat-prio',  stats.priority_1);
+}
+
+function formatTriageDate(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    const opts = { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' };
+    return d.toLocaleString('fr-FR', opts).replace(/:/, 'h');
+  } catch { return iso; }
+}
+
+/* Wire the Lancer le triage CTA */
+(function wireTriageCta() {
+  const start = () => {
+    const btn = document.getElementById('es-triage-btn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      if (btn.classList.contains('is-loading') || btn.classList.contains('is-done')) return;
+      btn.classList.add('is-loading');
+      const titleEl = btn.querySelector('.es-cta-title');
+      const subEl   = btn.querySelector('.es-cta-sub');
+      const origTitle = titleEl?.textContent;
+      const origSub   = subEl?.textContent;
+      if (titleEl) titleEl.textContent = 'Triage en cours…';
+      if (subEl)   subEl.textContent   = "L'agent analyse l'Inbox principale.";
+      try {
+        await callProxy('run_triage', {});
+        btn.classList.remove('is-loading');
+        btn.classList.add('is-done');
+        if (titleEl) titleEl.textContent = 'Triage lancé';
+        if (subEl)   subEl.textContent   = 'Tu recevras le rapport dans Notion.';
+        const arr = btn.querySelector('.es-cta-arrow');
+        if (arr) arr.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"><path d="M5 12l5 5l10 -10"/></svg>`;
+        toast('Triage automatique lancé');
+        setTimeout(() => {
+          btn.classList.remove('is-done');
+          if (titleEl) titleEl.textContent = origTitle;
+          if (subEl)   subEl.textContent   = origSub;
+          if (arr) arr.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/></svg>`;
+        }, 4500);
+      } catch (e) {
+        btn.classList.remove('is-loading');
+        if (titleEl) titleEl.textContent = origTitle;
+        if (subEl)   subEl.textContent   = origSub;
+        toast('Échec du lancement', 'error');
+      }
+    });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
 
 function renderMainLoading(person) {
   document.getElementById('main-contact').innerHTML = `
@@ -441,7 +559,6 @@ async function renderMain(person, notionData) {
         <button class="action-row-btn" id="enrich-toggle" style="margin-top:10px">
           <span class="action-icon">${icon('sparkles')}</span>
           <span class="action-label">Enrichir le contact</span>
-          <span class="action-arrow action-arrow-gen" title="Génère des informations">${icon('wand')}</span>
         </button>
         <div class="action-panel" id="enrich-panel" hidden>
           <div class="panel-hint">Que cherche-t-on ? (rôle exact, mandats, intérêts publics, contexte sociétaire…)</div>
@@ -496,13 +613,12 @@ async function renderMain(person, notionData) {
     container.querySelector('[data-action="create-notion"]')
       .addEventListener('click', e => doCreateNotion(e, person));
 
-    // En arrière-plan, Folk lookup silencieux. Si trouvé → upgrade UI.
+    // En arrière-plan, Folk lookup silencieux. Si trouvé → upgrade UI silencieusement.
     lookupFolkSilent(person).then(folkData => {
       if (S.main !== person) return; // user a changé de conv
       const badge = document.getElementById('main-badge');
       const actions = document.getElementById('fallback-actions');
       if (!badge || !folkData?.found) return;
-
       if (folkData.notion_page_id) {
         badge.outerHTML = `
           <a href="${esc(notionHref(folkData.notion_page_id))}" target="_blank" class="badge badge-found" title="Ouvrir dans Notion">
@@ -712,6 +828,7 @@ async function handleConversation(id, conversation) {
   S.participants = participants;
   if (!participants.length) { renderNoContact(); return; }
 
+  hideEmptyShell();
   S.main   = participants[0];
   S.others = participants.slice(1);
 
@@ -723,6 +840,8 @@ async function handleConversation(id, conversation) {
   renderOthers(S.others, id);
   loadConvInstructions(id);
   loadTasks(id);
+  loadTimeline(id);
+  loadContent(id);
 
   // Pré-remplit le formulaire de tâche (respecte les champs dirty)
   prefillTaskForm();
@@ -826,127 +945,378 @@ function togglePanel(triggerSel, panelId) {
 /* ════════════════════════════════════════════════════════
    TASK ACTIONS — optimistic everywhere
    ════════════════════════════════════════════════════════ */
-function setupTaskActions() {
-  // Briefing podcast — one-shot avec contexte enrichi
-  const briefBtn = document.querySelector('[data-action="brief-podcast"]');
-  if (briefBtn) briefBtn.addEventListener('click', () => {
-    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
-    setActionDone(briefBtn, 'Briefing lancé');
-    toast('Briefing podcast envoyé');
-    callProxy('brief_podcast', {
+/* Build the form HTML for each footer-sheet action. */
+const SHEET_TEMPLATES = {
+  reply: {
+    title: 'Briefer une réponse',
+    iconName: 'edit',
+    html: `
+      <div class="panel-hint">Instructions pour rédiger la réponse :</div>
+      <textarea id="sheet-reply-instructions" rows="5" placeholder="Ex : remercier, demander l'accord pour un appel cette semaine, ne pas s'engager sur le ticket avant validation…"></textarea>
+      <div class="save-bar">
+        <button class="btn btn-ghost" type="button" data-sheet-close>Annuler</button>
+        <button class="btn btn-primary" id="sheet-reply-submit" type="button">Lancer</button>
+      </div>`,
+  },
+  nda: {
+    title: 'Signer un NDA',
+    iconName: 'fileShield',
+    html: `
+      <div class="panel-hint">Vérifier les champs pré-remplis avant envoi :</div>
+      <form id="sheet-nda-form">
+        <div class="form-field">
+          <label class="form-field-label">Signataire <span class="required-dot"></span></label>
+          <input name="signataire" type="text" required>
+        </div>
+        <div class="form-field">
+          <label class="form-field-label">Email <span class="required-dot"></span></label>
+          <input name="email" type="email" required>
+        </div>
+        <div class="form-field">
+          <label class="form-field-label">Société <span class="required-dot"></span></label>
+          <input name="societe" type="text" required>
+        </div>
+        <div class="form-field">
+          <label class="form-field-label">Date d'effet <span class="required-dot"></span></label>
+          <input name="date" type="date" required>
+        </div>
+        <div class="field-error" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z"/><path d="M12 16h.01"/></svg>
+          Veuillez remplir tous les champs obligatoires.
+        </div>
+        <div class="save-bar">
+          <button class="btn btn-ghost" type="button" data-sheet-close>Annuler</button>
+          <button class="btn btn-primary" id="sheet-nda-submit" type="button">Envoyer le NDA</button>
+        </div>
+      </form>`,
+  },
+  feedback: {
+    title: 'Feedback à l\'agent',
+    iconName: 'message',
+    html: `
+      <div class="panel-hint">Donne ton retour à l'agent : suggestion ratée, règle de tri à ajuster, comportement à corriger…</div>
+      <textarea id="sheet-feedback-text" rows="5" placeholder="Ex : ce mail aurait dû être archivé automatiquement. Ou : la synthèse a raté le point clé sur la valorisation. Ou : Marc passe en VIP dès qu'il parle term-sheet…"></textarea>
+      <div class="save-bar">
+        <button class="btn btn-ghost" type="button" data-sheet-close>Annuler</button>
+        <button class="btn btn-primary" id="sheet-feedback-submit" type="button">Envoyer</button>
+      </div>`,
+  },
+  signature: {
+    title: 'Signature & documents juridiques',
+    iconName: 'signature',
+    // Two-column layout: left = action choices, right = attachments aside.
+    // Each action processes the selected attachments via the proxy.
+    html: `
+      <div class="panel-hint">Choisis une action — elle s'appliquera aux pièces jointes sélectionnées à droite.</div>
+      <div class="sig-grid">
+        <div class="sig-actions">
+          <button class="sig-action" type="button" data-sig-action="legal_analysis">
+            <span class="sig-action-icon">${icon('gavel')}</span>
+            <span class="sig-action-body">
+              <span class="sig-action-title">Analyse juridique</span>
+              <span class="sig-action-sub">Lecture des documents et propositions — points sensibles, clauses, risques.</span>
+            </span>
+            <span class="sig-action-arrow">${icon('arrow')}</span>
+          </button>
+          <button class="sig-action" type="button" data-sig-action="sign_documents">
+            <span class="sig-action-icon">${icon('signature')}</span>
+            <span class="sig-action-body">
+              <span class="sig-action-title">Signature des documents</span>
+              <span class="sig-action-sub">Envoi à DocuSign avec les signataires identifiés.</span>
+            </span>
+            <span class="sig-action-arrow">${icon('arrow')}</span>
+          </button>
+          <button class="sig-action" type="button" data-sig-action="generate_nda">
+            <span class="sig-action-icon">${icon('fileShield')}</span>
+            <span class="sig-action-body">
+              <span class="sig-action-title">Générer un NDA</span>
+              <span class="sig-action-sub">Création d'un NDA standard côté POF, injecté dans la conversation.</span>
+            </span>
+            <span class="sig-action-arrow">${icon('arrow')}</span>
+          </button>
+        </div>
+        <aside class="sig-aside">
+          <div class="sig-aside-label">Documents concernés</div>
+          <div class="sig-attachment-list" id="sig-attachment-list"></div>
+        </aside>
+      </div>`,
+  },
+};
+
+function openSheet(kind) {
+  const tpl = SHEET_TEMPLATES[kind];
+  if (!tpl) return;
+  const sheet  = document.getElementById('footer-sheet');
+  const title  = document.getElementById('sheet-title');
+  const iconEl = document.getElementById('sheet-icon');
+  const body   = document.getElementById('sheet-content');
+  if (!sheet || !body) return;
+  title.textContent = tpl.title;
+  iconEl.innerHTML  = icon(tpl.iconName);
+  body.innerHTML    = tpl.html;
+  sheet.removeAttribute('hidden');
+  sheet.dataset.kind = kind;
+
+  // Wire close handlers (backdrop, X button, cancel buttons)
+  sheet.querySelectorAll('[data-sheet-close]').forEach(el => {
+    el.addEventListener('click', closeSheet);
+  });
+
+  if (kind === 'ask')       wireAskSheet();
+  if (kind === 'reply')     wireReplySheet();
+  if (kind === 'nda')       { prefillSheetNda(); wireNdaSheet(); }
+  if (kind === 'feedback')  wireFeedbackSheet();
+  if (kind === 'signature') wireSignatureSheet();
+  // Mark the trigger button active
+  document.querySelectorAll('.footer-action').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('fa-' + kind);
+  if (btn) btn.classList.add('active');
+  // Esc to close
+  setTimeout(() => sheet.querySelector('input, textarea')?.focus(), 60);
+}
+
+function closeSheet() {
+  const sheet = document.getElementById('footer-sheet');
+  if (!sheet) return;
+  sheet.setAttribute('hidden', '');
+  document.querySelectorAll('.footer-action').forEach(b => b.classList.remove('active'));
+}
+
+function wireAskSheet() {
+  const submit = document.getElementById('sheet-ask-submit');
+  const mic    = document.getElementById('sheet-ask-mic');
+  if (mic) mic.addEventListener('click', () => {
+    mic.classList.add('listening');
+    toast('Démo : dictée vocale activée');
+    setTimeout(() => {
+      mic.classList.remove('listening');
+      const ta = document.getElementById('sheet-ask-prompt');
+      if (ta && !ta.value) {
+        ta.value = "Vérifie si Marc a déjà signé un term-sheet ailleurs et adapte les tâches suggérées.";
+      }
+    }, 1500);
+  });
+  if (!submit) return;
+  submit.addEventListener('click', () => {
+    const ta = document.getElementById('sheet-ask-prompt');
+    if (!ta?.value.trim()) { ta?.focus(); return; }
+    const prompt = ta.value;
+    closeSheet();
+    toast('Agent en cours d\'exécution — la synthèse sera mise à jour');
+    callProxy('ask_agent', {
+      prompt,
       conversation_id: S.conversationId,
-      subject: S.convSubject || '',
-      main:    S.main,
-      others:  S.others,
-      person_instructions: S.mainNotion?.person_instructions || '',
-      conv_instructions:   S.convOrigText || '',
+      main: S.main,
+      situation: TimelineState.situation,
     }).then(r => {
-      if (!r?.success) {
-        revertAction(briefBtn);
-        toast(r?.error || 'Erreur briefing', 'error');
+      if (r?.situation) {
+        TimelineState.situation = r.situation;
+        renderSituationNote();
       }
-    }).catch(() => { revertAction(briefBtn); toast('Erreur réseau', 'error'); });
-  });
-
-  // Estimer l'opportunité — one-shot
-  const estBtn = document.querySelector('[data-action="estimate-opp"]');
-  if (estBtn) estBtn.addEventListener('click', () => {
-    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
-    setActionDone(estBtn, 'Estimation lancée');
-    toast('Estimation en cours — résultat en commentaire');
-    callProxy('estimate_opportunity', { conversation_id: S.conversationId }).then(r => {
-      if (!r?.success) {
-        revertAction(estBtn);
-        toast(r?.error || 'Erreur estimation', 'error');
+      if (Array.isArray(r?.proposed)) {
+        TaskState.proposed = r.proposed;
+        renderProposed();
+        renderSituationNote();
       }
-    }).catch(() => { revertAction(estBtn); toast('Erreur réseau', 'error'); });
+    }).catch(() => toast('Erreur agent', 'error'));
   });
+}
 
-  // Toggle panels
-  togglePanel('[data-action="add-to-watch"]', 'watch-panel');
-  togglePanel('[data-action="brief-reply"]',  'reply-panel');
-  togglePanel('[data-action="sign-nda"]',     'nda-panel');
-
-  // Pré-remplit le formulaire NDA quand on ouvre le panneau
-  const ndaToggle = document.querySelector('[data-action="sign-nda"]');
-  if (ndaToggle) ndaToggle.addEventListener('click', () => {
-    setTimeout(prefillNdaForm, 0);
-  });
-
-  // Watch chips — écrit dans le briefing veille du contact principal
-  document.querySelectorAll('[data-watch]').forEach(chip => {
-    chip.addEventListener('click', () => {
-      if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
-      chip.classList.add('selected');
-      const cat = chip.dataset.watch;
-      const label = chip.textContent.trim();
-      const row = document.querySelector('[data-action="add-to-watch"]');
-      toast(`Ajouté à la veille « ${label} »`);
-      setTimeout(() => {
-        if (row && row.classList.contains('open')) row.click();
-        if (row) setActionDone(row, `Veille : ${label}`);
-        chip.classList.remove('selected');
-      }, 400);
-      callProxy('add_to_watch', {
-        category: cat,
-        conversation_id: S.conversationId,
-        contact_page_id: S.mainNotion?.notion_page_id,
-        contact_email:   S.main?.email,
-        contact_name:    S.main?.name,
-      }).then(r => {
-        if (!r?.success) {
-          if (row) revertAction(row);
-          toast(r?.error || 'Erreur veille', 'error');
-        }
-      });
-    });
-  });
-
-  // Brief reply submit — append à l'instruction conv
-  const replyBtn = document.getElementById('reply-submit');
-  if (replyBtn) replyBtn.addEventListener('click', () => {
-    const ta = document.getElementById('reply-instructions');
-    if (!ta.value.trim()) { ta.focus(); return; }
+function wireReplySheet() {
+  const submit = document.getElementById('sheet-reply-submit');
+  if (!submit) return;
+  submit.addEventListener('click', () => {
+    const ta = document.getElementById('sheet-reply-instructions');
+    if (!ta?.value.trim()) { ta?.focus(); return; }
     const instructions = ta.value;
-    const row = document.querySelector('[data-action="brief-reply"]');
-    // UX immédiate : ferme, reset, toast
-    ta.value = '';
-    if (row) { row.click(); setActionDone(row, 'Réponse briefée'); }
+    const btn = document.getElementById('fa-reply');
+    closeSheet();
+    if (btn) markFooterDone(btn);
     toast('Brief enregistré sur la conversation');
-    callProxy('brief_reply', {
-      instructions,
-      conversation_id: S.conversationId,
-    }).then(r => {
-      if (!r?.success) {
-        if (row) revertAction(row);
-        toast(r?.error || 'Erreur brief', 'error');
-      }
+    callProxy('brief_reply', { instructions, conversation_id: S.conversationId }).then(r => {
+      if (!r?.success) toast(r?.error || 'Erreur brief', 'error');
     });
   });
+}
 
-  // NDA submit + validation
-  const ndaBtn = document.getElementById('nda-submit');
-  if (ndaBtn) ndaBtn.addEventListener('click', () => {
-    const form = document.getElementById('nda-panel');
+function wireFeedbackSheet() {
+  const submit = document.getElementById('sheet-feedback-submit');
+  if (!submit) return;
+  submit.addEventListener('click', () => {
+    const ta = document.getElementById('sheet-feedback-text');
+    if (!ta?.value.trim()) { ta?.focus(); return; }
+    const text = ta.value;
+    const btn = document.getElementById('fa-feedback');
+    closeSheet();
+    if (btn) markFooterDone(btn);
+    toast('Feedback envoyé à l\'agent');
+    callProxy('submit_agent_feedback', {
+      text,
+      conversation_id: S.conversationId,
+      situation: TimelineState.situation,
+    }).then(r => {
+      if (r && r.success === false) toast(r.error || 'Erreur feedback', 'error');
+    });
+  });
+}
+
+function wireSignatureSheet() {
+  // Populate the attachment picker with the conversation's attachments.
+  const list = document.getElementById('sig-attachment-list');
+  if (list) {
+    const items = ContentState.attachments || [];
+    if (!items.length) {
+      list.innerHTML = `<div class="sig-empty">Aucune pièce jointe dans la conversation.</div>`;
+    } else {
+      list.innerHTML = items.map((a, i) => {
+        const badge = fileTypeBadge(a.type);
+        // Default: first attachment checked, others unchecked. The user adjusts as needed.
+        const checked = i === 0 ? 'checked' : '';
+        return `
+          <label class="sig-att" data-att-id="${esc(a.id)}">
+            <input type="checkbox" data-sig-att="${esc(a.id)}" ${checked}>
+            <span class="sig-att-icon" data-type="${badge.type}">${badge.label}</span>
+            <span class="sig-att-meta">
+              <span class="sig-att-name">${esc(a.name)}</span>
+              <span class="sig-att-size">${esc(a.size || '')}</span>
+            </span>
+          </label>`;
+      }).join('');
+    }
+  }
+  // Wire each action button
+  document.querySelectorAll('[data-sig-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.sigAction;
+      const selected = [...document.querySelectorAll('[data-sig-att]:checked')].map(cb => cb.dataset.sigAtt);
+      const fakeBtn = document.getElementById('fa-signature');
+      // Labels for toast confirmation
+      const labels = {
+        legal_analysis: "Analyse juridique lancée",
+        sign_documents: "Documents envoyés en signature",
+        generate_nda:   "NDA généré dans la conversation",
+      };
+      closeSheet();
+      if (fakeBtn) markFooterDone(fakeBtn);
+      toast(labels[action] || 'Action lancée');
+      callProxy('signature_action', {
+        action,
+        attachment_ids: selected,
+        conversation_id: S.conversationId,
+        main: S.main,
+      }).then(r => {
+        if (r && r.success === false) toast(r.error || 'Erreur signature', 'error');
+      }).catch(() => toast('Erreur réseau', 'error'));
+    });
+  });
+}
+
+function prefillSheetNda() {
+  const f = name => document.querySelector(`#sheet-nda-form input[name="${name}"]`);
+  if (f('signataire')) f('signataire').value = S.main?.name || '';
+  if (f('email'))      f('email').value      = S.main?.email || '';
+  if (f('societe')) {
+    const dom = (S.main?.email || '').split('@')[1] || '';
+    const stub = dom.split('.')[0] || '';
+    f('societe').value = stub ? stub.charAt(0).toUpperCase() + stub.slice(1) : '';
+  }
+  if (f('date')) f('date').value = new Date().toISOString().slice(0, 10);
+}
+
+function wireNdaSheet() {
+  const submit = document.getElementById('sheet-nda-submit');
+  if (!submit) return;
+  submit.addEventListener('click', () => {
+    const form = document.getElementById('sheet-nda-form');
     let valid = true;
-    form.querySelectorAll('[required]').forEach(input => {
-      if (!input.value.trim()) { input.classList.add('invalid'); valid = false; }
-      else input.classList.remove('invalid');
+    form.querySelectorAll('[required]').forEach(i => {
+      if (!i.value.trim()) { i.classList.add('invalid'); valid = false; }
+      else i.classList.remove('invalid');
     });
     const err = form.querySelector('.field-error');
     if (!valid) { err.removeAttribute('hidden'); return; }
     err.setAttribute('hidden', '');
     const data = {};
     form.querySelectorAll('input').forEach(i => { data[i.name] = i.value; });
-    const row = document.querySelector('[data-action="sign-nda"]');
-    if (row) { row.click(); setActionDone(row, 'NDA envoyé'); }
+    const btn = document.getElementById('fa-nda');
+    closeSheet();
+    if (btn) markFooterDone(btn);
     toast('NDA envoyé');
     callProxy('send_nda', { ...data, conversation_id: S.conversationId }).then(r => {
-      if (!r?.success) {
-        if (row) revertAction(row);
-        toast(r?.error || 'Erreur NDA', 'error');
-      }
+      if (!r?.success) toast(r?.error || 'Erreur NDA', 'error');
     });
+  });
+}
+
+function markFooterDone(btn) {
+  btn.classList.add('done');
+  clearTimeout(btn._t);
+  btn._t = setTimeout(() => btn.classList.remove('done'), 4000);
+}
+
+function setupTaskActions() {
+  // One-shot actions
+  const podcastBtn = document.getElementById('fa-podcast');
+  if (podcastBtn) podcastBtn.addEventListener('click', () => {
+    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+    // Context-aware: brief the visible pane (Contenu → mail, Actions → situation, otherwise → conv)
+    const activePane = document.querySelector('.pane.active')?.id || '';
+    let scope = 'conversation';
+    let scopeLabel = 'de la conversation';
+    if (activePane === 'pane-task')     { scope = 'content';   scopeLabel = 'du mail'; }
+    else if (activePane === 'pane-timeline') { scope = 'situation'; scopeLabel = 'de la synthèse'; }
+    markFooterDone(podcastBtn);
+    toast(`Briefing podcast ${scopeLabel} envoyé`);
+    callProxy('brief_podcast', {
+      conversation_id: S.conversationId,
+      scope,
+      subject: S.convSubject || '',
+      main:    S.main,
+      others:  S.others,
+      person_instructions: S.mainNotion?.person_instructions || '',
+      conv_instructions:   S.convOrigText || '',
+      situation: TimelineState.situation,
+    }).then(r => {
+      if (!r?.success) { podcastBtn.classList.remove('done'); toast(r?.error || 'Erreur briefing', 'error'); }
+    }).catch(() => { podcastBtn.classList.remove('done'); toast('Erreur réseau', 'error'); });
+  });
+
+  const estBtn = document.getElementById('fa-estimate');
+  if (estBtn) estBtn.addEventListener('click', () => {
+    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+    markFooterDone(estBtn);
+    toast('Estimation en cours — résultat en commentaire');
+    callProxy('estimate_opportunity', { conversation_id: S.conversationId }).then(r => {
+      if (!r?.success) { estBtn.classList.remove('done'); toast(r?.error || 'Erreur estimation', 'error'); }
+    }).catch(() => { estBtn.classList.remove('done'); toast('Erreur réseau', 'error'); });
+  });
+
+  // Sheet actions
+  const replyBtn = document.getElementById('fa-reply');
+  if (replyBtn) replyBtn.addEventListener('click', () => {
+    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+    openSheet('reply');
+  });
+  const ndaBtn = document.getElementById('fa-nda');
+  if (ndaBtn) ndaBtn.addEventListener('click', () => {
+    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+    openSheet('nda');
+  });
+  const feedbackBtn = document.getElementById('fa-feedback');
+  if (feedbackBtn) feedbackBtn.addEventListener('click', () => {
+    openSheet('feedback');
+  });
+  const signatureBtn = document.getElementById('fa-signature');
+  if (signatureBtn) signatureBtn.addEventListener('click', () => {
+    openSheet('signature');
+  });
+
+  // Global esc to close sheet
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      const sheet = document.getElementById('footer-sheet');
+      if (sheet && !sheet.hasAttribute('hidden')) closeSheet();
+    }
   });
 }
 
@@ -1061,14 +1431,49 @@ function phoneToWhatsApp(phone) {
 function renderContactFields(notionData, person) {
   const out = [];
 
+  // Job title (role / position)
+  const title       = notionData.title || '';
+  const titleSource = notionData.title_source || (title ? 'notion' : 'none');
+  if (title) {
+    const isAi = titleSource === 'email_signature';
+    out.push(`
+      <div class="contact-field is-readonly">
+        <span class="cf-icon">${icon('clipboard')}</span>
+        <div class="cf-body">
+          <div class="cf-label">
+            Titre / Rôle
+            ${isAi ? `<span class="ai-found-badge" title="Détecté dans la signature du dernier email">${icon('sparkles')} signature email</span>` : ''}
+          </div>
+          <div class="phone-row">
+            <span class="cf-text-value ${isAi ? 'ai-found' : ''}">${esc(title)}</span>
+            ${isAi ? `
+              <button class="add-to-notion-btn" data-add-notion="title" data-value="${esc(title)}" title="Ajouter ce titre à la fiche Notion">
+                ${icon('plus')} Ajouter à Notion
+              </button>` : ''}
+          </div>
+        </div>
+      </div>`);
+  }
+
   // Company
   if (notionData.company) {
+    const compSource = notionData.company_source || 'notion';
+    const isAi = compSource === 'email_signature';
     out.push(`
       <div class="contact-field is-readonly">
         <span class="cf-icon">${icon('building')}</span>
         <div class="cf-body">
-          <div class="cf-label">Société</div>
-          <div class="cf-value">${esc(notionData.company)}</div>
+          <div class="cf-label">
+            Société
+            ${isAi ? `<span class="ai-found-badge" title="Détecté dans la signature du dernier email">${icon('sparkles')} signature email</span>` : ''}
+          </div>
+          <div class="phone-row">
+            <span class="cf-text-value ${isAi ? 'ai-found' : ''}">${esc(notionData.company)}</span>
+            ${isAi ? `
+              <button class="add-to-notion-btn" data-add-notion="company" data-value="${esc(notionData.company)}" title="Ajouter cette société à la fiche Notion">
+                ${icon('plus')} Ajouter à Notion
+              </button>` : ''}
+          </div>
         </div>
       </div>`);
   }
@@ -1157,6 +1562,7 @@ function setupVipToggle(pageId) {
 }
 
 function setupContactFieldActions(notionData, person) {
+  // Phone "Add to Notion" button
   const addBtn = document.getElementById('phone-add-notion');
   if (addBtn) {
     addBtn.addEventListener('click', async () => {
@@ -1167,7 +1573,6 @@ function setupContactFieldActions(notionData, person) {
         phone: notionData.phone,
       });
       if (r?.success) {
-        // Promote to "notion" source
         const row = addBtn.closest('.contact-field');
         if (row) {
           const num = row.querySelector('.phone-number');
@@ -1183,6 +1588,34 @@ function setupContactFieldActions(notionData, person) {
       }
     });
   }
+
+  // Generic field add-to-Notion (title, company)
+  document.querySelectorAll('[data-add-notion]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const field = btn.dataset.addNotion;
+      const value = btn.dataset.value;
+      btn.disabled = true;
+      btn.innerHTML = `<div class="spinner" style="width:11px;height:11px;border-width:1.5px"></div> Ajout…`;
+      const r = await callProxy('add_field_to_notion', {
+        page_id: notionData.notion_page_id,
+        field, value,
+      });
+      if (r?.success) {
+        const row = btn.closest('.contact-field');
+        if (row) {
+          const val = row.querySelector('.cf-text-value');
+          if (val) val.classList.remove('ai-found');
+          const badge = row.querySelector('.ai-found-badge');
+          if (badge) badge.remove();
+          btn.outerHTML = '';
+        }
+        toast(`${field === 'title' ? 'Titre' : 'Société'} ajouté à Notion`);
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = `${icon('alert')} Réessayer`;
+      }
+    });
+  });
 }
 
 /* ════════════════════════════════════════════════════════
@@ -1297,6 +1730,7 @@ async function loadTasks(convId) {
   renderTasks();
   renderProposed();
   updateActionsCollapse();
+  if (typeof refreshSituationTodos === 'function') refreshSituationTodos();
 }
 
 /* ════════════════════════════════════════════════════════
@@ -1370,6 +1804,7 @@ function dismissProposed(id) {
     TaskState.proposed = TaskState.proposed.filter(t => t.id !== id);
     renderProposed();
     updateActionsCollapse();
+    if (typeof refreshSituationTodos === 'function') refreshSituationTodos();
   }, 280);
 }
 
@@ -1402,6 +1837,7 @@ async function acceptProposed(id) {
     renderTasks();
     renderProposed();
     updateActionsCollapse();
+    if (typeof refreshSituationTodos === 'function') refreshSituationTodos();
   }, 380);
 }
 
@@ -1486,6 +1922,7 @@ function toggleTask(id) {
   if (!t) return;
   t.done = !t.done;
   renderTasks();
+  if (typeof refreshSituationTodos === 'function') refreshSituationTodos();
   toast(t.done ? 'Tâche validée' : 'Tâche réouverte');
   callProxy('toggle_task', { id, done: t.done, conversation_id: S.conversationId })
     .then(r => {
@@ -1524,6 +1961,7 @@ function createTask() {
   };
   TaskState.tasks.unshift(ghost);
   renderTasks();
+  if (typeof refreshSituationTodos === 'function') refreshSituationTodos();
 
   // 2. Reset form (garde deadline/prio/assignee comme défauts)
   nameEl.value = ''; clearDirty(nameEl);
@@ -1573,3 +2011,1265 @@ function isOverdue(iso) {
   const today = new Date(); today.setHours(0,0,0,0);
   return d < today;
 }
+
+
+/* ════════════════════════════════════════════════════════
+   TIMELINE PANE
+   ════════════════════════════════════════════════════════ */
+const TimelineState = { situation: null, upcoming: [], interactions: [] };
+
+const TL_TYPE_META = {
+  email:    { icon: 'mail',      label: 'Email' },
+  whatsapp: { icon: 'whatsapp',  label: 'WhatsApp' },
+  visio:    { icon: 'videoCam',  label: 'Note de réunion' },
+  nda:      { icon: 'signature', label: 'NDA signé' },
+  note:     { icon: 'notes',     label: 'Note Notion' },
+  mou:      { icon: 'clipboard', label: 'MOU' },
+  contrat:  { icon: 'signature', label: 'Contrat' },
+};
+// "is-note" styling for types that come from Notion notes (visio + note)
+const TL_NOTE_TYPES = new Set(['visio', 'note']);
+
+const TL_UPCOMING_TYPE_ICON = {
+  meeting: 'videoCam',
+  task:    'taskBox',
+};
+
+async function loadTimeline(convId) {
+  const r = await callProxy('list_timeline', { conversation_id: convId });
+  if (convId !== S.conversationId) return;
+  TimelineState.situation    = r?.situation || null;
+  TimelineState.upcoming     = Array.isArray(r?.upcoming) ? r.upcoming : [];
+  TimelineState.interactions = Array.isArray(r?.interactions) ? r.interactions : [];
+  TimelineState.interactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+  renderSituationNote();
+  renderTimeline();
+}
+
+/* Public hook : when tasks/proposed change in the Task tab, re-render the
+   "À faire" section so both tabs stay in sync. */
+function refreshSituationTodos() {
+  if (TimelineState.situation) renderSituationNote();
+}
+
+/* ── Situation note ────────────────────────────────────── */
+function renderSituationNote() {
+  const root = document.getElementById('situation-note');
+  if (!root) return;
+  const s = TimelineState.situation;
+  if (!s) {
+    root.innerHTML = `
+      <div class="waiting" style="padding:20px 8px">
+        ${icon('inbox')}
+        <div class="msg">Pas de synthèse disponible pour cette conversation</div>
+      </div>`;
+    return;
+  }
+  const stamp = formatRelStamp(s.updated);
+
+  // À FAIRE = tasks planifiées (non done) + proposées
+  const planned  = (TaskState.tasks || []).filter(t => !t.done);
+  const proposed = TaskState.proposed || [];
+  const todosHtml = renderTodosList(planned, proposed);
+
+  // Risques (data carries icon names, NOT emoji)
+  const risks = (s.risks || []).map(r => `
+    <div class="pn-risk" data-sev="${esc(r.severity || 'high')}">
+      <span class="pn-risk-icon">${icon(r.icon || 'alertCircle')}</span>
+      <span class="pn-risk-text">${esc(r.text)}</span>
+    </div>`).join('');
+
+  // Status : structured bullets or legacy prose
+  const statusHtml = renderStatusBody(s);
+
+  root.innerHTML = `
+    <div class="pn-head">
+      <span class="pn-head-icon">${icon('pin')}</span>
+      <span class="pn-head-title">Executive summary</span>
+      <span class="pn-head-stamp" title="${esc(s.updated || '')}">Maj ${esc(stamp)}</span>
+      <button class="pn-regen" id="pn-regen" title="Régénérer la synthèse">${icon('refresh')}</button>
+    </div>
+    ${statusHtml}
+    <div class="pn-section actions">
+      <div class="pn-section-title"><span class="pn-section-icon">${icon('checks')}</span><span>À faire</span></div>
+      <div class="pn-list">${todosHtml}</div>
+    </div>
+    ${risks ? `
+      <div class="pn-section risks">
+        <div class="pn-section-title"><span class="pn-section-icon">${icon('alertCircle')}</span><span>Points de vigilance</span></div>
+        <div class="pn-list">${risks}</div>
+      </div>` : ''}
+  `;
+
+  wireSituationActions();
+  wirePnStatusEditable();
+}
+
+/* Render situation status as either structured bullets or a fallback paragraph. */
+function renderStatusBody(s) {
+  // Editable rich-text block. Combines headline + bullets into a single
+  // contenteditable surface. Keyboard-only formatting:
+  //   Cmd/Ctrl + B → bold     · Cmd/Ctrl + I → italic
+  //   Cmd/Ctrl + L → bullet list toggle
+  //   Enter inside a <li> creates a new bullet; empty <li> on Enter exits the list
+  // Saves on blur (debounced).
+  let inner = '';
+  if (s.headline) inner += `<p class="pn-status-headline"><strong>${esc(s.headline)}</strong></p>`;
+  if (Array.isArray(s.bullets) && s.bullets.length) {
+    inner += '<ul class="pn-status-bullets">' + s.bullets.map(b => `
+      <li>${b.label ? `<strong>${esc(b.label)} :</strong> ` : ''}${esc(b.value || '')}</li>`).join('') + '</ul>';
+  }
+  if (!inner && s.status) inner = `<p>${esc(s.status)}</p>`;
+  return `<div class="pn-status" id="pn-status-editable" contenteditable="true" spellcheck="false"
+    data-placeholder="Aucune synthèse — clique pour en saisir une.">${inner}</div>`;
+}
+
+/* Wire up keyboard shortcuts + autosave on the editable executive summary. */
+function wirePnStatusEditable() {
+  const el = document.getElementById('pn-status-editable');
+  if (!el || el.dataset.wired) return;
+  el.dataset.wired = '1';
+
+  const exec = (cmd, val) => {
+    try { document.execCommand(cmd, false, val || null); } catch (_) {}
+  };
+
+  el.addEventListener('keydown', e => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); exec('bold'); return; }
+    if (mod && (e.key === 'i' || e.key === 'I')) { e.preventDefault(); exec('italic'); return; }
+    if (mod && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); exec('insertUnorderedList'); return; }
+    // Empty-line in a bullet → exit the list (default browser behavior is fine, kept for clarity)
+    // Enter inside an existing <li> creates a new one (browser default)
+  });
+
+  // Strip pasted formatting → plain text only, then re-apply current bold/italic.
+  el.addEventListener('paste', e => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    exec('insertText', text);
+  });
+
+  let saveTimer;
+  const persist = () => {
+    if (!TimelineState.situation) return;
+    TimelineState.situation._editedHtml = el.innerHTML;
+    callProxy('update_situation', {
+      conversation_id: S.conversationId,
+      html: el.innerHTML,
+    }).catch(() => {});
+  };
+  el.addEventListener('blur', persist);
+  el.addEventListener('input', () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(persist, 1200);
+  });
+}
+
+function renderTodosList(planned, proposed) {
+  const arrow = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>`;
+  const chevron = `<svg class="pn-todo-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6l6 -6"/></svg>`;
+  const checkSvg = icon('check');
+
+  const renderEditableFields = (t) => `
+    <div class="pn-todo-edit">
+      <label class="pn-todo-field pn-todo-field-stack">
+        <span>${icon('aiNotes')} Description</span>
+        <textarea data-field="description" rows="2" placeholder="Détails, contexte, à-faire…">${esc(t.description || '')}</textarea>
+      </label>
+      <div class="pn-todo-fields">
+        <label class="pn-todo-field">
+          <span>${icon('calendar')} Échéance</span>
+          <input type="date" data-field="deadline" value="${esc(t.deadline || '')}">
+        </label>
+        <div class="pn-todo-field">
+          <span>${icon('flag')} Priorité</span>
+          <div class="pn-task-prio" data-prio-current="${esc(t.prio || 'P1')}">
+            ${['P0','P1','P2','P3'].map(p => `
+              <button type="button" data-prio-val="${p}" class="${t.prio === p ? 'selected ' + p.toLowerCase() : ''}">${p}</button>`).join('')}
+          </div>
+        </div>
+        <div class="pn-todo-field">
+          <span>${icon('user')} Assigné à</span>
+          <div class="pn-todo-assignee" data-assignee-current="${esc(t.assignee || 'ai')}">
+            <button type="button" data-assignee-val="ai" class="${t.assignee !== 'human' ? 'selected' : ''}">${icon('robot')} IA</button>
+            <button type="button" data-assignee-val="human" class="${t.assignee === 'human' ? 'selected' : ''}">${icon('human')} Humain</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  const plannedHtml = planned.map(t => `
+    <div class="pn-todo ${t.done ? 'done' : ''}" data-todo-id="${esc(t.id)}">
+      <div class="pn-todo-row">
+        <button class="pn-todo-check" data-todo-toggle="${esc(t.id)}" title="Marquer fait">${checkSvg}</button>
+        <span class="pn-todo-text">${esc(t.name)}</span>
+        <span class="pn-todo-prio ${esc((t.prio || 'P1').toLowerCase())}">${esc(t.prio || 'P1')}</span>
+        <button class="pn-todo-expand" data-todo-expand="${esc(t.id)}" title="Détails / éditer" aria-expanded="false">${chevron}</button>
+        ${t.notion_url && t.notion_url !== '#' ? `<a class="pn-todo-link" href="${esc(t.notion_url)}" target="_blank" rel="noopener" title="Ouvrir dans Notion">${arrow}</a>` : ''}
+      </div>
+      ${renderEditableFields(t)}
+    </div>`).join('');
+
+  const proposedHtml = proposed.map(t => `
+    <div class="pn-todo proposed" data-proposed-id="${esc(t.id)}">
+      <div class="pn-todo-row">
+        <span class="pn-todo-check" title="Tâche suggérée par l'IA">${icon('wand')}</span>
+        <span class="pn-todo-text">${esc(t.name)}</span>
+        <span class="pn-todo-prio ${esc((t.prio || 'P1').toLowerCase())}">${esc(t.prio || 'P1')}</span>
+        <button class="pn-todo-expand" data-todo-expand="${esc(t.id)}" title="Détails / éditer" aria-expanded="false">${chevron}</button>
+        <span class="pn-todo-actions">
+          <button class="pn-todo-btn dismiss" data-proposed-dismiss="${esc(t.id)}" title="Ignorer">${icon('x')}</button>
+          <button class="pn-todo-btn accept" data-proposed-accept="${esc(t.id)}" title="Créer cette tâche">${icon('check')}</button>
+        </span>
+      </div>
+      ${renderEditableFields(t)}
+    </div>`).join('');
+
+  const addBtn = `
+    <button class="pn-todo-add" id="pn-todo-add" type="button" title="Créer une tâche">
+      <span class="pn-todo-add-icon">${icon('plus')}</span>
+      <span>Ajouter une tâche…</span>
+    </button>
+    <div class="pn-task-form" id="pn-task-form" data-prio="P1">
+      <input type="text" class="pn-task-input" id="pn-task-input" placeholder="Intitulé de la tâche…" autocomplete="off">
+      <div class="pn-task-row">
+        <div class="pn-task-prio" id="pn-task-prio">
+          <button type="button" data-prio="P0">P0</button>
+          <button type="button" data-prio="P1" class="selected p1">P1</button>
+          <button type="button" data-prio="P2">P2</button>
+          <button type="button" data-prio="P3">P3</button>
+        </div>
+        <div class="pn-task-actions">
+          <button type="button" class="pn-task-cancel" id="pn-task-cancel">Annuler</button>
+          <button type="button" class="pn-task-save" id="pn-task-save">${icon('check')} Créer</button>
+        </div>
+      </div>
+    </div>`;
+
+  if (!planned.length && !proposed.length) {
+    return `
+      <div style="font-size:11px;color:var(--text-xmuted);padding:2px 4px 6px;">
+        Aucune tâche pour cette conversation.
+      </div>
+      ${addBtn}`;
+  }
+  return plannedHtml + proposedHtml + addBtn;
+}
+
+/* Wire the editable fields inside an expanded task (date / prio / assignee).
+   Edits are persisted optimistically: planned tasks → TaskState.tasks + proxy.
+   Proposed tasks → TaskState.proposed (local only until accepted). */
+function wireTodoEditFields(todoEl) {
+  if (todoEl.dataset.editWired) return;
+  todoEl.dataset.editWired = '1';
+  const isProposed = todoEl.classList.contains('proposed');
+  const id = isProposed ? todoEl.dataset.proposedId : todoEl.dataset.todoId;
+  const findTask = () => isProposed
+    ? TaskState.proposed.find(t => t.id === id)
+    : TaskState.tasks.find(t => t.id === id);
+
+  // Deadline
+  const dateInput = todoEl.querySelector('input[data-field="deadline"]');
+  if (dateInput) dateInput.addEventListener('change', () => {
+    const t = findTask();
+    if (!t) return;
+    t.deadline = dateInput.value;
+    if (!isProposed) {
+      callProxy('update_task', { id, deadline: t.deadline, conversation_id: S.conversationId });
+      toast('Échéance mise à jour');
+    }
+  });
+
+  // Title (in-card edit — mirror change to the row text)
+  const nameInput = todoEl.querySelector('input[data-field="name"]');
+  if (nameInput) {
+    const commitName = () => {
+      const t = findTask();
+      if (!t) return;
+      const v = nameInput.value.trim();
+      if (!v || v === t.name) return;
+      t.name = v;
+      const rowText = todoEl.querySelector('.pn-todo-row .pn-todo-text');
+      if (rowText) rowText.textContent = v;
+      if (!isProposed) {
+        callProxy('update_task', { id, name: v, conversation_id: S.conversationId });
+        toast('Titre mis à jour');
+      }
+    };
+    nameInput.addEventListener('change', commitName);
+    nameInput.addEventListener('blur',   commitName);
+  }
+
+  // Description (editable textarea)
+  const descInput = todoEl.querySelector('textarea[data-field="description"]');
+  if (descInput) {
+    const commitDesc = () => {
+      const t = findTask();
+      if (!t) return;
+      const v = descInput.value;
+      if (v === (t.description || '')) return;
+      t.description = v;
+      if (!isProposed) {
+        callProxy('update_task', { id, description: v, conversation_id: S.conversationId });
+        toast('Description mise à jour');
+      }
+    };
+    descInput.addEventListener('blur', commitDesc);
+  }
+
+  // Priority
+  todoEl.querySelectorAll('[data-prio-val]').forEach(b => {
+    b.addEventListener('click', () => {
+      const t = findTask();
+      if (!t) return;
+      const val = b.dataset.prioVal;
+      t.prio = val;
+      todoEl.querySelectorAll('[data-prio-val]').forEach(x => {
+        x.classList.remove('selected', 'p0', 'p1', 'p2', 'p3');
+      });
+      b.classList.add('selected', val.toLowerCase());
+      // Update the small inline prio badge
+      const badge = todoEl.querySelector('.pn-todo-row .pn-todo-prio');
+      if (badge) {
+        badge.className = 'pn-todo-prio ' + val.toLowerCase();
+        badge.textContent = val;
+      }
+      if (!isProposed) {
+        callProxy('update_task', { id, prio: val, conversation_id: S.conversationId });
+        toast('Priorité mise à jour');
+      }
+    });
+  });
+
+  // Assignee
+  todoEl.querySelectorAll('[data-assignee-val]').forEach(b => {
+    b.addEventListener('click', () => {
+      const t = findTask();
+      if (!t) return;
+      const val = b.dataset.assigneeVal;
+      t.assignee = val;
+      todoEl.querySelectorAll('[data-assignee-val]').forEach(x => x.classList.remove('selected'));
+      b.classList.add('selected');
+      if (!isProposed) {
+        callProxy('update_task', { id, assignee: val, conversation_id: S.conversationId });
+        toast(`Assigné à ${val === 'human' ? 'humain' : 'IA'}`);
+      }
+    });
+  });
+}
+
+function wireSituationActions() {
+  const regen = document.getElementById('pn-regen');
+  if (regen) regen.addEventListener('click', () => {
+    regen.classList.add('spinning');
+    toast('Synthèse en cours de régénération…');
+    setTimeout(() => regen.classList.remove('spinning'), 800);
+    callProxy('regen_situation', { conversation_id: S.conversationId }).catch(() => {});
+  });
+
+  // ASK button — focuses the agent dock chat input
+  const askBtn = document.getElementById('pn-ask');
+  if (askBtn) askBtn.addEventListener('click', () => {
+    if (typeof openAgentDockWithFocus === 'function') openAgentDockWithFocus();
+  });
+
+  // Briefing podcast pour la synthèse situation
+  const synthPodBtn = document.getElementById('pn-podcast-btn');
+  if (synthPodBtn) synthPodBtn.addEventListener('click', () => {
+    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+    synthPodBtn.classList.add('done');
+    synthPodBtn.innerHTML = `${icon('check')}<span>Lancé</span>`;
+    toast('Briefing de la synthèse en cours');
+    callProxy('brief_podcast', {
+      conversation_id: S.conversationId,
+      scope: 'situation',
+      situation: TimelineState.situation,
+    }).catch(() => toast('Erreur réseau', 'error'));
+  });
+
+  // Briefing podcast button (in Contenu pane's mail summary header)
+  const podBtn = document.getElementById('summary-podcast-btn');
+  if (podBtn && !podBtn.dataset.wired) {
+    podBtn.dataset.wired = '1';
+    podBtn.addEventListener('click', () => {
+      if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+      podBtn.classList.add('done');
+      podBtn.innerHTML = `${icon('check')}<span>Briefing lancé</span>`;
+      toast('Briefing podcast en cours');
+      callProxy('brief_podcast', {
+        conversation_id: S.conversationId,
+        subject: S.convSubject || '',
+        main: S.main,
+        others: S.others,
+      }).catch(() => toast('Erreur réseau', 'error'));
+    });
+  }
+
+  // Expand/collapse for tasks (planned and proposed)
+  document.querySelectorAll('#situation-note [data-todo-expand]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      const todo = btn.closest('.pn-todo');
+      const isOpen = todo.classList.toggle('expanded');
+      btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      if (isOpen) wireTodoEditFields(todo);
+    });
+  });
+
+  // Planned task toggle (same as Task tab)
+  document.querySelectorAll('#situation-note [data-todo-toggle]').forEach(b => {
+    b.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleTask(b.dataset.todoToggle);
+      renderSituationNote();
+    });
+  });
+
+  // Proposed accept
+  document.querySelectorAll('#situation-note [data-proposed-accept]').forEach(b => {
+    b.addEventListener('click', async e => {
+      e.preventDefault(); e.stopPropagation();
+      const id = b.dataset.proposedAccept;
+      await acceptProposed(id);
+      renderSituationNote();
+    });
+  });
+  // Proposed dismiss
+  document.querySelectorAll('#situation-note [data-proposed-dismiss]').forEach(b => {
+    b.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      dismissProposed(b.dataset.proposedDismiss);
+      setTimeout(() => renderSituationNote(), 300);
+    });
+  });
+
+  // + Ajouter une tâche → formulaire inline (pas de bascule vers Tâche tab)
+  const addBtn = document.getElementById('pn-todo-add');
+  const form   = document.getElementById('pn-task-form');
+  const input  = document.getElementById('pn-task-input');
+  const cancel = document.getElementById('pn-task-cancel');
+  const save   = document.getElementById('pn-task-save');
+  const prioGroup = document.getElementById('pn-task-prio');
+
+  function openForm() {
+    if (!form) return;
+    form.classList.add('open');
+    if (addBtn) addBtn.style.display = 'none';
+    setTimeout(() => input?.focus(), 30);
+  }
+  function closeForm() {
+    if (!form) return;
+    form.classList.remove('open');
+    if (addBtn) addBtn.style.display = '';
+    if (input) input.value = '';
+    form.dataset.prio = 'P1';
+    prioGroup?.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('selected', b.dataset.prio === 'P1');
+      b.classList.remove('p0', 'p1', 'p2', 'p3');
+      if (b.dataset.prio === 'P1') b.classList.add('p1');
+    });
+  }
+  function submitForm() {
+    const name = input?.value.trim();
+    if (!name) { input?.focus(); return; }
+    const prio = form.dataset.prio || 'P1';
+    // Optimistic insert into TaskState.tasks + create via proxy (uses existing pipeline)
+    const tempId = 'pn-' + Date.now();
+    TaskState.tasks.unshift({
+      id: tempId, name, prio, assignee: 'human', deadline: '',
+      done: false, notion_url: '#', _pending: true,
+    });
+    renderTasks();
+    renderSituationNote();
+    toast('Tâche créée');
+    callProxy('create_task', {
+      conversation_id: S.conversationId,
+      name, description: '', deadline: '', prio, assignee: 'human',
+    }).then(r => {
+      const idx = TaskState.tasks.findIndex(t => t.id === tempId);
+      if (idx < 0) return;
+      if (r?.success && r.task) {
+        TaskState.tasks[idx] = { ...r.task, _pending: false };
+      } else {
+        TaskState.tasks.splice(idx, 1);
+        toast(r?.error || 'Erreur création', 'error');
+      }
+      renderTasks();
+      renderSituationNote();
+    });
+  }
+
+  if (addBtn) addBtn.addEventListener('click', openForm);
+  if (cancel) cancel.addEventListener('click', closeForm);
+  if (save)   save.addEventListener('click', submitForm);
+  if (input) input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submitForm(); }
+    if (e.key === 'Escape') { e.preventDefault(); closeForm(); }
+  });
+  if (prioGroup) prioGroup.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      prioGroup.querySelectorAll('button').forEach(b => {
+        b.classList.remove('selected', 'p0', 'p1', 'p2', 'p3');
+      });
+      btn.classList.add('selected', btn.dataset.prio.toLowerCase());
+      form.dataset.prio = btn.dataset.prio;
+    });
+  });
+
+  // Inline edit on task name (click to edit, blur/Enter to save)
+  document.querySelectorAll('#situation-note .pn-todo:not(.proposed) .pn-todo-text').forEach(el => {
+    el.title = 'Cliquer pour modifier';
+    el.addEventListener('click', e => {
+      const todo = el.closest('.pn-todo');
+      const id = todo?.dataset.todoId;
+      if (!id) return;
+      makeInlineEditable(el, id);
+    });
+  });
+}
+
+/* Turn a task name span into an inline editable text node */
+function makeInlineEditable(el, taskId) {
+  if (el.isContentEditable) return;
+  const original = el.textContent;
+  el.contentEditable = 'true';
+  el.style.outline = '1px solid var(--focus)';
+  el.style.outlineOffset = '2px';
+  el.style.borderRadius = '3px';
+  el.style.background = 'var(--bg)';
+  el.focus();
+  // place caret at end
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  const finish = (commit) => {
+    el.contentEditable = 'false';
+    el.style.outline = '';
+    el.style.outlineOffset = '';
+    el.style.background = '';
+    const newName = el.textContent.trim();
+    if (!commit || !newName || newName === original) {
+      el.textContent = original;
+      return;
+    }
+    const t = TaskState.tasks.find(x => x.id === taskId);
+    if (t) { t.name = newName; }
+    renderTasks();
+    renderSituationNote();
+    toast('Tâche mise à jour');
+    callProxy('update_task', { id: taskId, name: newName, conversation_id: S.conversationId })
+      .catch(() => toast('Erreur sync', 'error'));
+  };
+
+  el.addEventListener('blur', () => finish(true), { once: true });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); el.textContent = original; el.blur(); }
+  });
+}
+
+/* ── Key dates ─────────────────────────────────────────── */
+function renderKeyDates() {
+  const list = document.getElementById('key-dates');
+  const cnt  = document.getElementById('key-dates-count');
+  if (!list) return;
+  const items = TimelineState.upcoming || [];
+  if (cnt) cnt.textContent = items.length;
+
+  if (!items.length) {
+    list.innerHTML = `<div class="tl-empty">Pas de date clé à venir.</div>`;
+    return;
+  }
+
+  const sorted = [...items].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  list.innerHTML = sorted.map(d => {
+    const dObj = new Date(d.date);
+    const day  = dObj.getDate();
+    const mon  = dObj.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '');
+    const rel  = formatRelDate(d.date);
+    const today = isToday(dObj);
+    const imminent = !today && daysUntil(dObj) <= 3 && daysUntil(dObj) >= 0;
+    const iconName = TL_UPCOMING_TYPE_ICON[d.type] || 'calendar';
+    const cls = ['key-date', today && 'today', imminent && 'imminent'].filter(Boolean).join(' ');
+    const tag = d.url ? 'a' : 'div';
+    const href = d.url ? ` href="${esc(d.url)}" target="_blank" rel="noopener"` : '';
+    return `
+      <${tag} class="${cls}"${href}>
+        <div class="kd-day">
+          <span class="kd-day-num">${day}</span>
+          <span class="kd-day-mon">${esc(mon)}</span>
+        </div>
+        <div class="kd-body">
+          <div class="kd-title">${esc(d.title)}</div>
+          <div class="kd-meta">
+            <span class="kd-rel">${esc(rel)}</span>
+            ${d.meta ? `<span style="opacity:.5">·</span><span>${esc(d.meta)}</span>` : ''}
+          </div>
+        </div>
+        <span class="kd-type-icon">${icon(iconName)}</span>
+      </${tag}>`;
+  }).join('');
+}
+
+/* ── Timeline (unified : future + past) ─────────────────
+   Future events bubble to the top, sorted ascending (closest first),
+   under an "À venir" header. Past events use the existing relative buckets.
+   Future rows are visually distinct (tinted background, "Dans X j" prefix). */
+function renderTimeline() {
+  const list = document.getElementById('timeline-list');
+  if (!list) return;
+  const past = (TimelineState.interactions || []).slice();
+  const upcoming = (TimelineState.upcoming || []).slice();
+  if (!past.length && !upcoming.length) {
+    list.innerHTML = `<div class="tl-empty">Aucun événement enregistré pour cette conversation.</div>`;
+    return;
+  }
+
+  const arrowSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>`;
+
+  // Future events : sort ascending (closest first)
+  upcoming.sort((a, b) => new Date(a.date) - new Date(b.date));
+  // Past events : sort descending (newest first)
+  past.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const renderFutureItem = (it) => {
+    const d = new Date(it.date);
+    const day = d.getDate();
+    const mon = d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '');
+    const rel = formatRelDate(it.date);
+    const hasTime = (it.date || '').length > 10;
+    const time = hasTime ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+    const today = daysUntil(d) === 0;
+    const imminent = !today && daysUntil(d) <= 3 && daysUntil(d) > 0;
+    const blockCls = ['tl-date-block', today && 'today', imminent && 'imminent'].filter(Boolean).join(' ');
+    const metaBits = [rel, time, it.meta].filter(Boolean).map(x => esc(x)).join(' <span class="tl-dot-sep">·</span> ');
+    return `
+      <div class="tl-item future" data-type="${esc(it.type)}">
+        <div class="${blockCls}">
+          <span class="tl-date-day">${day}</span>
+          <span class="tl-date-mon">${esc(mon)}</span>
+        </div>
+        <div class="tl-body">
+          <div class="tl-title tl-title-future">${esc(it.title)}</div>
+          <div class="tl-meta tl-meta-future">${metaBits}</div>
+          ${it.url ? `<a class="tl-link tl-link-future" href="${esc(it.url)}" target="_blank" rel="noopener" title="Ouvrir">${arrowSvg}</a>` : ''}
+        </div>
+      </div>`;
+  };
+
+  const renderPastItem = (it) => {
+    const meta = TL_TYPE_META[it.type] || { icon: 'inbox', label: it.type || '' };
+    const isNote = TL_NOTE_TYPES.has(it.type);
+    const defaultTitle = it.type === 'whatsapp' ? 'Message WhatsApp' :
+                         it.type === 'email'    ? 'Email' :
+                         it.type === 'visio'    ? 'Note de réunion' :
+                         it.type === 'note'     ? 'Note Notion' :
+                         it.type === 'mou'      ? 'MOU' :
+                         it.type === 'contrat'  ? 'Contrat' :
+                         it.type === 'nda'      ? 'NDA' : '—';
+    const title = it.title || defaultTitle;
+    const time = formatTime(it.date);
+    const authorBit = it.author ? `<span class="tl-author-name">${esc(it.author)}</span>` : '';
+    const summaryHtml = it.summary ? `<div class="tl-summary">${esc(it.summary)}</div>` : '';
+    return `
+      <div class="tl-item ${isNote ? 'is-note' : ''}" data-type="${esc(it.type)}">
+        <span class="tl-node" data-type="${esc(it.type)}" title="${esc(meta.label)}">${icon(meta.icon)}</span>
+        <div class="tl-body">
+          <div class="tl-head">
+            <div class="tl-title">${esc(title)}</div>
+            <span class="tl-time">${esc(time)}</span>
+          </div>
+          ${summaryHtml}
+          ${authorBit || it.url ? `
+            <div class="tl-meta">
+              ${authorBit}
+              ${it.url ? `<a class="tl-link" href="${esc(it.url)}" target="_blank" rel="noopener" title="Ouvrir">${arrowSvg}</a>` : ''}
+            </div>` : ''}
+        </div>
+      </div>`;
+  };
+
+  // Group past events by relative bucket
+  const pastBuckets = [];
+  let lastBucket = null;
+  past.forEach(it => {
+    const b = bucketLabel(it.date);
+    if (b !== lastBucket) {
+      pastBuckets.push({ label: b, items: [] });
+      lastBucket = b;
+    }
+    pastBuckets[pastBuckets.length - 1].items.push(it);
+  });
+
+  const futureHtml = upcoming.length
+    ? `<div class="tl-day-sep tl-day-sep-future">À venir</div>${upcoming.map(renderFutureItem).join('')}`
+    : '';
+  const pastHtml = pastBuckets.map(bk =>
+    `<div class="tl-day-sep">${esc(bk.label)}</div>${bk.items.map(renderPastItem).join('')}`
+  ).join('');
+
+  list.innerHTML = futureHtml + pastHtml;
+}
+
+/* ── Date helpers ──────────────────────────────────────── */
+function isToday(d) {
+  const t = new Date(); t.setHours(0,0,0,0);
+  const dd = new Date(d); dd.setHours(0,0,0,0);
+  return dd.getTime() === t.getTime();
+}
+function daysUntil(d) {
+  const t = new Date(); t.setHours(0,0,0,0);
+  const dd = new Date(d); dd.setHours(0,0,0,0);
+  return Math.round((dd - t) / 86400000);
+}
+function formatRelDate(iso) {
+  const diff = daysUntil(new Date(iso));
+  if (diff === 0)  return "Aujourd'hui";
+  if (diff === 1)  return 'Demain';
+  if (diff === -1) return 'Hier';
+  if (diff > 0 && diff < 7)  return `Dans ${diff} j`;
+  if (diff < 0 && diff > -7) return `Il y a ${-diff} j`;
+  const d = new Date(iso);
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+function formatRelStamp(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60)        return "à l'instant";
+  if (diff < 3600)      return `il y a ${Math.round(diff/60)} min`;
+  if (diff < 86400)     return `il y a ${Math.round(diff/3600)} h`;
+  if (diff < 7*86400)   return `il y a ${Math.round(diff/86400)} j`;
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+function formatTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const hasTime = (iso.length > 10);
+  const diff = daysUntil(d);
+  const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  if (diff === 0)  return hasTime ? time : "Aujourd'hui";
+  if (diff === -1) return hasTime ? `Hier · ${time}` : 'Hier';
+  if (diff > -7)   return hasTime ? `${d.toLocaleDateString('fr-FR', { weekday: 'short' })} · ${time}` : d.toLocaleDateString('fr-FR', { weekday: 'short' });
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + (hasTime ? ' · ' + time : '');
+}
+function bucketLabel(iso) {
+  const diff = daysUntil(new Date(iso));
+  if (diff === 0)             return "Aujourd'hui";
+  if (diff === -1)            return 'Hier';
+  if (diff > -7)              return 'Cette semaine';
+  if (diff > -30)             return 'Ce mois-ci';
+  const d = new Date(iso);
+  return d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+}
+
+
+/* ════════════════════════════════════════════════════════
+   CONTENT PANE — Mail summary + Attachments + Sources
+   ════════════════════════════════════════════════════════ */
+const ContentState = { summary: '', attachments: [], sources: [] };
+
+async function loadContent(convId) {
+  const r = await callProxy('analyze_content', { conversation_id: convId });
+  if (convId !== S.conversationId) return;
+  ContentState.summary     = r?.summary || '';
+  ContentState.attachments = Array.isArray(r?.attachments) ? r.attachments : [];
+  ContentState.sources     = Array.isArray(r?.sources) ? r.sources : [];
+  renderMailSummary();
+  renderAttachments();
+  renderSources();
+}
+
+function renderMailSummary() {
+  // v3 layout: editable textarea inside #summary-edit
+  const editRoot = document.getElementById('summary-edit');
+  if (editRoot) {
+    const text = ContentState.summary || '';
+    editRoot.innerHTML = `
+      <textarea id="summary-edit-text" rows="5"
+        placeholder="Le résumé de la conversation apparaîtra ici…">${esc(text)}</textarea>`;
+    const ta = document.getElementById('summary-edit-text');
+    if (ta) {
+      ta.addEventListener('input', () => {
+        ContentState.summary = ta.value;
+        updatePodcastLaunchSub();
+      });
+    }
+    updatePodcastLaunchSub();
+    return;
+  }
+  // v2 layout: read-only display in #mail-summary
+  const root = document.getElementById('mail-summary');
+  if (!root) return;
+  if (!ContentState.summary) {
+    root.innerHTML = `<div style="font-size:11.5px;color:var(--text-xmuted);">Pas de résumé disponible.</div>`;
+    return;
+  }
+  root.innerHTML = `<div class="mail-summary-text">${esc(ContentState.summary)}</div>`;
+}
+
+function fileTypeBadge(type) {
+  const t = (type || '').toLowerCase();
+  if (['pdf'].includes(t)) return { type: 'pdf', label: 'PDF' };
+  if (['doc', 'docx'].includes(t)) return { type: 'doc', label: 'DOC' };
+  if (['xls', 'xlsx', 'csv'].includes(t)) return { type: 'xls', label: 'XLS' };
+  if (['ppt', 'pptx'].includes(t)) return { type: 'ppt', label: 'PPT' };
+  if (['jpg', 'png', 'jpeg', 'gif', 'webp'].includes(t)) return { type: 'img', label: 'IMG' };
+  return { type: 'other', label: t.slice(0, 3).toUpperCase() || 'FILE' };
+}
+
+function renderAttachments() {
+  const list = document.getElementById('attachment-list');
+  const cnt  = document.getElementById('attachments-count');
+  if (!list) return;
+  const items = ContentState.attachments;
+  if (cnt) cnt.textContent = items.length;
+  // v3 layout: unified podcast launcher → render checkbox per item
+  const v3 = !!document.getElementById('podcast-launch-btn');
+  if (!items.length) {
+    list.innerHTML = `<div style="font-size:11.5px;color:var(--text-xmuted);padding:6px 4px;">Aucune pièce jointe.</div>`;
+    if (v3) updatePodcastLaunchSub();
+    return;
+  }
+  // Initialize selection state once: only the heaviest attachment is checked by default
+  if (v3 && items.length && !items.some(a => typeof a._pod !== 'undefined')) {
+    const sizeBytes = (s) => {
+      if (!s) return 0;
+      const m = String(s).trim().match(/([\d.,]+)\s*([kmgt]?)b?/i);
+      if (!m) return 0;
+      const n = parseFloat(m[1].replace(',', '.'));
+      const unit = m[2].toLowerCase();
+      const mult = unit === 't' ? 1e12 : unit === 'g' ? 1e9 : unit === 'm' ? 1e6 : unit === 'k' ? 1e3 : 1;
+      return n * mult;
+    };
+    let heaviestIdx = 0;
+    let maxSize = -1;
+    items.forEach((a, i) => {
+      const sz = sizeBytes(a.size);
+      if (sz > maxSize) { maxSize = sz; heaviestIdx = i; }
+    });
+    items.forEach((a, i) => { a._pod = (i === heaviestIdx); });
+  } else {
+    items.forEach(a => { if (typeof a._pod === 'undefined') a._pod = !v3; });
+  }
+
+  list.innerHTML = items.map(a => {
+    const badge = fileTypeBadge(a.type);
+    const arrowSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>`;
+    const headRight = v3
+      ? `<a class="att-open" href="${esc(a.url || '#')}" target="_blank" rel="noopener" title="Ouvrir le document" aria-label="Ouvrir ${esc(a.name)}">${arrowSvg}</a>`
+      : `<span class="att-size">${esc(a.size || '')}</span>`;
+    const footRight = v3
+      ? `<label class="att-pod-toggle" title="Inclure dans le briefing podcast">
+           <input type="checkbox" data-att-pod="${esc(a.id)}" ${a._pod ? 'checked' : ''}>
+           <span>Podcast</span>
+         </label>`
+      : `<button class="att-podcast" data-att-podcast="${esc(a.id)}" title="Générer un briefing podcast de cette PJ">
+           ${icon('microphone')} Briefing podcast
+         </button>
+         ${notionPill(a.url, { label: 'Ouvrir', title: 'Ouvrir le document' })}`;
+    return `
+      <div class="attachment ${v3 ? 'v3' : ''}" data-att-id="${esc(a.id)}">
+        <div class="att-icon" data-type="${badge.type}">${badge.label}</div>
+        <div class="att-body">
+          <div class="att-head">
+            <span class="att-name">${esc(a.name)}</span>
+            ${headRight}
+          </div>
+          ${a.summary ? `<div class="att-summary">${esc(a.summary)}</div>` : ''}
+          <div class="att-foot">
+            ${footRight}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  if (!v3) {
+    list.querySelectorAll('[data-att-podcast]').forEach(b => {
+      b.addEventListener('click', () => {
+        const id = b.dataset.attPodcast;
+        const a = ContentState.attachments.find(x => x.id === id);
+        b.classList.add('done');
+        b.innerHTML = `${icon('check')} Briefing lancé`;
+        toast(`Briefing « ${a?.name || ''} » en cours`);
+        callProxy('brief_attachment', {
+          attachment_id: id,
+          attachment_name: a?.name,
+          conversation_id: S.conversationId,
+        }).then(r => {
+          if (!r?.success) {
+            b.classList.remove('done');
+            b.innerHTML = `${icon('microphone')} Briefing podcast`;
+            toast(r?.error || 'Erreur briefing PJ', 'error');
+          }
+        });
+      });
+    });
+  } else {
+    list.querySelectorAll('[data-att-pod]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = cb.dataset.attPod;
+        const a = ContentState.attachments.find(x => x.id === id);
+        if (a) a._pod = cb.checked;
+        updatePodcastLaunchSub();
+      });
+    });
+    updatePodcastLaunchSub();
+  }
+}
+
+const SOURCE_ICON = {
+  linkedin: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5C4.98 4.881 3.87 6 2.5 6S.02 4.881.02 3.5C.02 2.12 1.13 1 2.5 1s2.48 1.12 2.48 2.5zM5 8H0v16h5V8zm7.982 0H8.014v16H13v-8.4c0-4.66 6-5 6 0V24h5V13.92c0-7.88-8.922-7.593-11.018-3.71V8z"/></svg>`,
+  web: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M3.6 9h16.8"/><path d="M3.6 15h16.8"/><path d="M11.5 3a17 17 0 0 0 0 18"/><path d="M12.5 3a17 17 0 0 1 0 18"/></svg>`,
+};
+
+function renderSources() {
+  const list = document.getElementById('source-list');
+  const cnt  = document.getElementById('sources-count');
+  if (!list) return;
+  const items = ContentState.sources;
+  if (cnt) cnt.textContent = items.length;
+  if (!items.length) {
+    list.innerHTML = `<div style="font-size:11.5px;color:var(--text-xmuted);padding:6px 4px;">Aucune source détectée.</div>`;
+    return;
+  }
+  list.innerHTML = items.map(s => {
+    const isLinkedIn = s.type === 'linkedin';
+    const actionLabel = isLinkedIn ? 'Suivre' : 'Ajouter à la veille';
+    const doneLabel   = isLinkedIn ? 'Suivi' : 'En veille';
+    return `
+      <div class="source-item" data-src-id="${esc(s.id)}">
+        <span class="src-icon" data-type="${esc(s.type)}">${SOURCE_ICON[s.type] || SOURCE_ICON.web}</span>
+        <div class="src-body">
+          <a class="src-name" href="${esc(s.url || '#')}" target="_blank" rel="noopener">${esc(s.name)}</a>
+          ${s.subtitle ? `<div class="src-sub">${esc(s.subtitle)}</div>` : ''}
+          ${s.meta ? `<div class="src-meta">${esc(s.meta)}</div>` : ''}
+        </div>
+        <a class="src-open" href="${esc(s.url || '#')}" target="_blank" rel="noopener" title="Ouvrir le lien" aria-label="Ouvrir ${esc(s.name)}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>
+        </a>
+        <button class="src-action ${s.watched ? 'watched' : ''}" data-src-action="${esc(s.id)}"
+                aria-pressed="${s.watched ? 'true' : 'false'}">
+          ${s.watched ? icon('check') + ' ' + doneLabel : icon('plus') + ' ' + actionLabel}
+        </button>
+      </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-src-action]').forEach(b => {
+    b.addEventListener('click', () => {
+      const id = b.dataset.srcAction;
+      const s = ContentState.sources.find(x => x.id === id);
+      if (!s) return;
+      s.watched = !s.watched;
+      const isLinkedIn = s.type === 'linkedin';
+      const actionLabel = isLinkedIn ? 'Suivre' : 'Ajouter à la veille';
+      const doneLabel   = isLinkedIn ? 'Suivi' : 'En veille';
+      b.classList.toggle('watched', s.watched);
+      b.setAttribute('aria-pressed', s.watched ? 'true' : 'false');
+      b.innerHTML = s.watched ? icon('check') + ' ' + doneLabel : icon('plus') + ' ' + actionLabel;
+      toast(s.watched ? `Ajouté à la veille : ${s.name}` : `Retiré de la veille : ${s.name}`);
+      callProxy('follow_source', { source_id: id, watched: s.watched, conversation_id: S.conversationId });
+    });
+  });
+}
+
+
+/* ════════════════════════════════════════════════════════
+   AGENT CHAT DOCK
+   ════════════════════════════════════════════════════════ */
+const AgentState = {
+  messages: [],  // {role: 'user'|'agent', text, ts}
+  sending: false,
+};
+
+function setupAgentDock() {
+  const dock      = document.getElementById('agent-dock');
+  const toggle    = document.getElementById('agent-thread-toggle');
+  const thread    = document.getElementById('agent-thread');
+  const composer  = document.getElementById('agent-composer');
+  const input     = document.getElementById('agent-input');
+  const sendBtn   = document.getElementById('agent-send');
+  const mic       = document.getElementById('agent-mic');
+  if (!dock || !toggle || !composer || !input) return;
+
+  // Auto-grow textarea
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+  });
+
+  // Toggle thread
+  toggle.addEventListener('click', () => toggleAgentDock());
+
+  // Submit on Enter (Shift+Enter = newline)
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendAgentMessage();
+    }
+  });
+
+  composer.addEventListener('submit', e => {
+    e.preventDefault();
+    sendAgentMessage();
+  });
+
+  // Mic — demo dictation
+  if (mic) mic.addEventListener('click', () => {
+    mic.classList.add('listening');
+    toast('Démo : dictée vocale activée');
+    setTimeout(() => {
+      mic.classList.remove('listening');
+      if (!input.value) {
+        input.value = "Vérifie si Marc a déjà signé un term-sheet ailleurs et adapte les tâches suggérées.";
+        input.dispatchEvent(new Event('input'));
+        input.focus();
+      }
+    }, 1500);
+  });
+}
+
+function toggleAgentDock(force) {
+  const dock   = document.getElementById('agent-dock');
+  const thread = document.getElementById('agent-thread');
+  const toggle = document.getElementById('agent-thread-toggle');
+  if (!dock || !thread || !toggle) return;
+  const willOpen = force !== undefined ? force : (dock.dataset.state !== 'open');
+  dock.dataset.state = willOpen ? 'open' : 'collapsed';
+  toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  if (willOpen) {
+    thread.removeAttribute('hidden');
+    scrollAgentThreadBottom();
+  } else {
+    thread.setAttribute('hidden', '');
+  }
+}
+
+function openAgentDockWithFocus() {
+  toggleAgentDock(true);
+  setTimeout(() => document.getElementById('agent-input')?.focus(), 80);
+}
+
+function sendAgentMessage() {
+  const input = document.getElementById('agent-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text || AgentState.sending) return;
+  AgentState.sending = true;
+
+  // Add user message
+  AgentState.messages.push({ role: 'user', text, ts: Date.now() });
+  input.value = '';
+  input.style.height = 'auto';
+  toggleAgentDock(true);
+  renderAgentMessages();
+
+  // Thinking indicator
+  AgentState.messages.push({ role: 'agent', text: '', ts: Date.now(), _thinking: true });
+  renderAgentMessages();
+
+  callProxy('ask_agent', {
+    prompt: text,
+    conversation_id: S.conversationId,
+    main: S.main,
+    situation: TimelineState.situation,
+  }).then(r => {
+    // Remove thinking
+    AgentState.messages = AgentState.messages.filter(m => !m._thinking);
+    const reply = r?.reply || (r?.situation
+      ? "Synthèse mise à jour. J'ai aussi régénéré les tâches suggérées dans l'onglet Actions."
+      : "OK, j'ai pris en compte ta demande. Les éléments sont mis à jour dans les onglets concernés.");
+    AgentState.messages.push({ role: 'agent', text: reply, ts: Date.now() });
+    AgentState.sending = false;
+    renderAgentMessages();
+    updateAgentPreview();
+    // Side-effects: if the agent updated the situation or proposed tasks, refresh views
+    if (r?.situation) {
+      TimelineState.situation = r.situation;
+      renderSituationNote();
+    }
+    if (Array.isArray(r?.proposed)) {
+      TaskState.proposed = r.proposed;
+      renderProposed();
+      renderSituationNote();
+    }
+  }).catch(() => {
+    AgentState.messages = AgentState.messages.filter(m => !m._thinking);
+    AgentState.messages.push({ role: 'agent', text: 'Erreur réseau, réessaie.', ts: Date.now() });
+    AgentState.sending = false;
+    renderAgentMessages();
+  });
+}
+
+function renderAgentMessages() {
+  const list  = document.getElementById('agent-messages');
+  const empty = document.getElementById('agent-thread-empty');
+  if (!list) return;
+  if (!AgentState.messages.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  list.innerHTML = AgentState.messages.map(m => {
+    if (m._thinking) {
+      return `
+        <div class="agent-msg agent thinking">
+          <span class="agent-msg-avatar">${icon('wand')}</span>
+          <div class="agent-msg-bubble">
+            <span class="agent-typing"><span></span><span></span><span></span></span>
+          </div>
+        </div>`;
+    }
+    const avatar = m.role === 'agent'
+      ? `<span class="agent-msg-avatar">${icon('wand')}</span>`
+      : `<span class="agent-msg-avatar">${esc(initials(S.main?.name || 'Moi'))}</span>`;
+    return `
+      <div class="agent-msg ${m.role}">
+        ${avatar}
+        <div class="agent-msg-bubble">${esc(m.text)}</div>
+      </div>`;
+  }).join('');
+  scrollAgentThreadBottom();
+}
+
+function scrollAgentThreadBottom() {
+  const thread = document.getElementById('agent-thread');
+  if (thread) thread.scrollTop = thread.scrollHeight;
+}
+
+function updateAgentPreview() {
+  const previewEl = document.getElementById('agent-thread-preview');
+  const countEl   = document.getElementById('agent-thread-count');
+  if (!previewEl) return;
+  const lastAgent = [...AgentState.messages].reverse().find(m => m.role === 'agent' && !m._thinking);
+  if (lastAgent) {
+    const short = lastAgent.text.length > 70 ? lastAgent.text.slice(0, 70) + '…' : lastAgent.text;
+    previewEl.textContent = short;
+  }
+  const count = AgentState.messages.filter(m => !m._thinking).length;
+  if (countEl) {
+    if (count > 0) {
+      countEl.textContent = count;
+      countEl.removeAttribute('hidden');
+    } else {
+      countEl.setAttribute('hidden', '');
+    }
+  }
+}
+
+// Boot
+window.addEventListener('DOMContentLoaded', setupAgentDock);
+
+/* ════════════════════════════════════════════════════════
+   V3 — Conv. fusionnée : feedback + podcast launcher unique
+   ════════════════════════════════════════════════════════ */
+function sendFeedback() {
+  const ta  = document.getElementById('feedback-textarea');
+  const btn = document.getElementById('feedback-send-btn');
+  if (!ta || !btn) return;
+  const text = ta.value.trim();
+  if (!text) {
+    ta.focus();
+    btn.innerHTML = `${icon('alert')} Texte vide`;
+    setTimeout(() => { btn.innerHTML = 'Envoyer'; }, 1800);
+    return;
+  }
+  btn.innerHTML  = `${icon('check')} Envoyé`;
+  btn.disabled = true;
+  toast('Merci — feedback envoyé à l\'équipe IA');
+  callProxy('submit_rules_feedback', {
+    conversation_id: S.conversationId,
+    text,
+  }).catch(() => {});
+  setTimeout(() => {
+    ta.value = '';
+    btn.innerHTML = 'Envoyer';
+    btn.disabled = false;
+  }, 1800);
+}
+function resetFeedback() {
+  const ta = document.getElementById('feedback-textarea');
+  if (ta) ta.value = '';
+}
+
+/* Update the count line under the big "Lancer le briefing podcast" button */
+function updatePodcastLaunchSub() {
+  const sub = document.getElementById('podcast-launch-sub');
+  if (!sub) return;
+  const summaryIncluded = !!document.getElementById('pod-incl-summary')?.checked;
+  const selectedPJ = (ContentState.attachments || []).filter(a => a._pod !== false).length;
+  const parts = [];
+  if (summaryIncluded) parts.push('Résumé');
+  if (selectedPJ === 1) parts.push('1 pièce jointe');
+  else if (selectedPJ > 1) parts.push(`${selectedPJ} pièces jointes`);
+  sub.innerHTML = parts.length
+    ? esc(parts.join(' + '))
+    : `<span style="color:#c46a3a">Rien de sélectionné</span>`;
+  const btn = document.getElementById('podcast-launch-btn');
+  if (btn) btn.disabled = parts.length === 0;
+}
+
+function setupPodcastLauncher() {
+  const incl = document.getElementById('pod-incl-summary');
+  const btn  = document.getElementById('podcast-launch-btn');
+  if (!btn) return;
+  if (incl) incl.addEventListener('change', updatePodcastLaunchSub);
+  btn.addEventListener('click', () => {
+    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+    const summaryIncluded = !!incl?.checked;
+    const summaryText = document.getElementById('summary-edit-text')?.value || ContentState.summary || '';
+    const selectedPJ = (ContentState.attachments || []).filter(a => a._pod !== false);
+    if (!summaryIncluded && !selectedPJ.length) {
+      toast('Sélectionne au moins un élément', 'error');
+      return;
+    }
+    btn.classList.add('done');
+    btn.disabled = true;
+    const titleEl = btn.querySelector('.bpb-title');
+    const subEl   = btn.querySelector('.bpb-sub');
+    const arrowEl = btn.querySelector('.bpb-arrow');
+    if (titleEl) titleEl.textContent = 'Briefing podcast lancé';
+    if (subEl)   subEl.textContent   = 'Tu recevras le rendu dans Notion.';
+    if (arrowEl) arrowEl.innerHTML   = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M5 12l5 5l10 -10"/></svg>`;
+    toast('Briefing podcast en cours');
+    callProxy('brief_podcast', {
+      conversation_id: S.conversationId,
+      include_summary: summaryIncluded,
+      summary_text: summaryText,
+      attachment_ids: selectedPJ.map(a => a.id),
+      subject: S.convSubject || '',
+      main: S.main,
+      others: S.others,
+    }).catch(() => toast('Erreur réseau', 'error'));
+    setTimeout(() => {
+      btn.classList.remove('done');
+      btn.disabled = false;
+      if (titleEl) titleEl.textContent = 'Lancer le briefing podcast';
+      if (arrowEl) arrowEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/></svg>`;
+      updatePodcastLaunchSub();
+    }, 4800);
+  });
+  updatePodcastLaunchSub();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  setupPodcastLauncher();
+  // Cmd/Ctrl+Enter to send feedback
+  const fb = document.getElementById('feedback-textarea');
+  if (fb) fb.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      sendFeedback();
+    }
+  });
+});
