@@ -380,12 +380,22 @@ textarea::placeholder { color: var(--text-xmuted); }
 .p-status {
   position: absolute;
   bottom: -2px; right: -2px;
-  width: 11px; height: 11px;
+  width: 13px; height: 13px;
   border-radius: 50%;
   background: var(--pof-gray-400);
   border: 2px solid var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.p-status.found   { background: var(--pof-teal-dark); }
+.p-status.found {
+  background: var(--pof-teal-dark);
+  width: 14px; height: 14px;
+}
+.p-status.found svg {
+  width: 9px; height: 9px;
+  display: block;
+}
 .p-status.missing { background: var(--pof-gray-400); }
 
 .p-info { flex: 1; min-width: 0; }

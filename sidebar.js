@@ -80,11 +80,18 @@ function loadIndexFromCache() {
 function saveIndexToCache(persons) {
   try { sessionStorage.setItem(INDEX_CACHE_KEY, JSON.stringify({ ts: Date.now(), persons })); } catch {}
 }
+function normalizeName(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
 function buildIndex(persons) {
-  const idx = new Map();
+  const idx = new Map();        // email -> person
+  const nameIdx = new Map();    // normalized name -> person (pour fallback)
   for (const p of persons) {
     if (p.email) idx.set(p.email.toLowerCase().trim(), p);
+    if (p.name)  nameIdx.set(normalizeName(p.name), p);
   }
+  idx._byName = nameIdx;
   return idx;
 }
 async function ensureIndex() {
@@ -105,16 +112,20 @@ async function ensureIndex() {
 function lookupLocal(person) {
   if (!S.personIndex) return null;
   const email = (person.email || '').toLowerCase().trim();
-  if (!email) return null;
-  const hit = S.personIndex.get(email);
+  let hit = email ? S.personIndex.get(email) : null;
+  // Fallback : matching par nom normalisé (sans accents, casse-insensible)
+  if (!hit && person.name && S.personIndex._byName) {
+    hit = S.personIndex._byName.get(normalizeName(person.name));
+  }
   if (!hit) return null;
   return {
     found: true,
     notion_page_id:  hit.page_id,
     notion_page_url: hit.page_url,
     name:            hit.name || person.name,
-    email:           hit.email,
-    person_instructions: hit.instructions || ''
+    email:           hit.email || person.email,
+    person_instructions: hit.instructions || '',
+    matched_by:      email && S.personIndex.get(email) ? 'email' : 'name'
   };
 }
 function invalidateIndex() {
@@ -259,35 +270,33 @@ async function loadConvInstructions(convId) {
   document.getElementById('conv-textarea').value = instructions;
 }
 
-async function saveConv() {
+function saveConv() {
   const text = document.getElementById('conv-textarea').value;
   const btn  = document.getElementById('conv-save-btn');
 
   if (!S.conversationId) {
     btn.innerHTML = `${icon('alert')} Aucune conversation`;
-    setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; }, 2500);
+    setTimeout(() => { btn.innerHTML = 'Sauvegarder'; }, 2500);
     return;
   }
 
-  btn.innerHTML = `<div class="spinner"></div> Sauvegarde…`;
-  btn.disabled  = true;
+  // Feedback immédiat : "Sauvegardé" sans attendre le serveur
+  S.convOrigText = text;
+  btn.innerHTML  = `${icon('check')} Sauvegardé`;
+  setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; }, 2000);
 
-  const r = await callProxy('upsert_conv', {
+  // Sync en arrière-plan
+  callProxy('upsert_conv', {
     missive_conversation_id: S.conversationId,
     text,
     ...(S.convPageId ? { page_id: S.convPageId } : {}),
-  });
-
-  if (r?.notion_page_id) S.convPageId = r.notion_page_id;
-  if (r?.success) {
-    S.convOrigText = text;
-    btn.innerHTML  = `${icon('check')} Sauvegardé`;
-  } else {
-    btn.innerHTML  = `${icon('alert')} ${esc(r?.error || 'Erreur')}`;
-    btn.title      = r?.error || '';
-    console.warn('[POF] upsert_conv failed:', r);
-  }
-  setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; btn.title=''; }, 2500);
+  }).then(r => {
+    if (r?.notion_page_id) S.convPageId = r.notion_page_id;
+    if (!r?.success) {
+      console.warn('[POF] upsert_conv failed:', r);
+      toast(r?.error || 'Échec sauvegarde conv', 'error');
+    }
+  }).catch(e => toast('Erreur réseau', 'error'));
 }
 
 function resetConv() {
@@ -407,22 +416,23 @@ function resetPersonInstructions(orig) {
   if (ta) ta.value = orig;
 }
 
-async function savePersonInstructions(pageId) {
+function savePersonInstructions(pageId) {
   const ta  = document.getElementById('person-instructions');
   const btn = document.getElementById('person-save-btn');
   if (!ta || !btn) return;
-  btn.innerHTML = `<div class="spinner"></div> Sauvegarde…`;
-  btn.disabled  = true;
-  const r = await updatePersonInstructions(pageId, ta.value);
-  if (r?.success) {
-    btn.innerHTML = `${icon('check')} Sauvegardé`;
-    invalidateIndex();
-  } else {
-    btn.innerHTML = `${icon('alert')} ${esc(r?.error || 'Erreur')}`;
-    btn.title     = r?.error || '';
-    console.warn('[POF] update_person_instructions failed:', r);
-  }
-  setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; btn.title=''; }, 2500);
+  const text = ta.value;
+  // Feedback immédiat
+  btn.innerHTML = `${icon('check')} Sauvegardé`;
+  setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; }, 2000);
+  // Sync background
+  updatePersonInstructions(pageId, text).then(r => {
+    if (r?.success) {
+      invalidateIndex();
+    } else {
+      console.warn('[POF] update_person_instructions failed:', r);
+      toast(r?.error || 'Échec sauvegarde personne', 'error');
+    }
+  }).catch(() => toast('Erreur réseau', 'error'));
 }
 
 async function doCreateNotion(ev, person) {
@@ -490,6 +500,8 @@ function renderOthers(others, convToken) {
     if (data?.found) {
       dot.classList.remove('missing');
       dot.classList.add('found');
+      // Coche blanche dans la pastille verte (visible vs simple point)
+      dot.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"><path d="M5 12l5 5l10 -10"/></svg>`;
     }
   });
 }
@@ -956,13 +968,22 @@ function renderTasks() {
   });
 }
 
-async function toggleTask(id) {
+function toggleTask(id) {
   const t = TaskState.tasks.find(t => t.id === id);
   if (!t) return;
   t.done = !t.done;
   renderTasks();
-  await callProxy('toggle_task', { id, done: t.done, conversation_id: S.conversationId });
   toast(t.done ? 'Tâche validée' : 'Tâche réouverte');
+  callProxy('toggle_task', { id, done: t.done, conversation_id: S.conversationId })
+    .then(r => {
+      if (!r?.success) {
+        // Rollback
+        t.done = !t.done;
+        renderTasks();
+        toast(r?.error || 'Échec toggle tâche', 'error');
+      }
+    })
+    .catch(() => { t.done = !t.done; renderTasks(); toast('Erreur réseau', 'error'); });
 }
 
 /* Création optimiste :
