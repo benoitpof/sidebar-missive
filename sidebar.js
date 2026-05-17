@@ -184,19 +184,40 @@ const updatePersonInstructions    = (pageId, text) => callProxy('update_person_i
    EXTRACT PARTICIPANTS
    ════════════════════════════════════════════════════════ */
 function extractParticipants(conv) {
+  if (!conv) return [];
   const seen = new Set();
   const list = [];
   const add = field => {
     const arr = Array.isArray(field) ? field : (field ? [field] : []);
     arr.forEach(p => {
+      if (!p) return;
       const email = (p.address || p.email || '').toLowerCase().trim();
-      const name  = p.name || email.split('@')[0] || '';
+      const name  = p.name || p.display_name || email.split('@')[0] || '';
       if (email && !seen.has(email)) { seen.add(email); list.push({ name, email }); }
     });
   };
-  const msg = conv?.latest_message || conv?.messages?.[0];
-  if (msg) { add(msg.from_field); add(msg.to_fields); add(msg.cc_fields); }
-  if (!list.length && conv?.contacts) conv.contacts.forEach(add);
+  // Shape 1 : objet conversation avec latest_message
+  const msg = conv.latest_message || (Array.isArray(conv.messages) ? conv.messages[conv.messages.length - 1] : null);
+  if (msg) {
+    add(msg.from_field);
+    add(msg.to_fields);
+    add(msg.cc_fields);
+    add(msg.bcc_fields);
+  }
+  // Shape 2 : conversation.users (Missive SDK officiel : tableau d'users)
+  if (Array.isArray(conv.users)) conv.users.forEach(add);
+  // Shape 3 : conversation.contacts
+  if (Array.isArray(conv.contacts)) conv.contacts.forEach(add);
+  // Shape 4 : conversation.participants
+  if (Array.isArray(conv.participants)) conv.participants.forEach(add);
+  // Shape 5 : depuis tous les messages
+  if (Array.isArray(conv.messages)) {
+    conv.messages.forEach(m => {
+      add(m.from_field);
+      add(m.to_fields);
+      add(m.cc_fields);
+    });
+  }
   return sortParticipants(list);
 }
 
@@ -478,11 +499,11 @@ function renderOthers(others, convToken) {
    ════════════════════════════════════════════════════════ */
 function bootMissive(attempt = 0) {
   if (!window.Missive) {
-    if (attempt < 10) { // retry 10x, 200ms apart = 2s total
+    if (attempt < 10) { // retry 10×200ms = 2s
       setTimeout(() => bootMissive(attempt + 1), 200);
       return;
     }
-    console.error('[POF] Missive SDK introuvable après 2s. Vérifie le chargement de sdk.js.');
+    console.error('[POF] Missive SDK introuvable après 2s.');
     document.getElementById('main-contact').innerHTML = `
       <div class="waiting">
         ${icon('alert')}
@@ -490,43 +511,66 @@ function bootMissive(attempt = 0) {
       </div>`;
     return;
   }
-  console.log('[POF] Missive SDK détectée, subscribe conversation event');
+  console.log('[POF] Missive SDK détectée. Version:', Missive?.id);
 
-  // Pré-chargement asynchrone de l'index Personnes (fire and forget)
+  // Pré-charge l'index Personnes en background
   ensureIndex().catch(e => console.warn('[POF] index preload failed:', e));
 
-  Missive.on('conversation', async function(id, { conversation }) {
-    console.log('[POF] conversation event:', id, conversation);
-    if (id === S.conversationId) return;
-    S.conversationId = id;
-    S.convPageId     = null;
-    S.convOrigText   = '';
-    document.getElementById('conv-textarea').value = '';
-    document.getElementById('conv-missive-id').textContent = id || '—';
+  // Mock preview : conserve l'ancienne API on('conversation', cb)
+  if (window.__POF_MOCK) {
+    Missive.on('conversation', (id, payload) => handleConversation(id, payload?.conversation));
+    return;
+  }
 
-    const participants = extractParticipants(conversation);
-    S.participants = participants;
-    if (!participants.length) { renderNoContact(); return; }
+  // Prod : API officielle Missive Sidebar SDK
+  // - 'change:conversations' reçoit un array d'IDs sélectionnées
+  // - retroactive: true → callback déclenché immédiatement si une conv est déjà sélectionnée
+  Missive.on('change:conversations', async (ids) => {
+    console.log('[POF] change:conversations:', ids);
+    if (!ids || !ids.length) { renderNoContact(); return; }
+    const id = ids[0];
+    try {
+      const convs = await Missive.fetchConversations(ids);
+      const conv = Array.isArray(convs) ? convs[0] : convs;
+      console.log('[POF] fetched conversation:', conv);
+      handleConversation(id, conv);
+    } catch (e) {
+      console.error('[POF] fetchConversations failed:', e);
+      handleConversation(id, null);
+    }
+  }, { retroactive: true });
+}
 
-    S.main   = participants[0];
-    S.others = participants.slice(1);
+async function handleConversation(id, conversation) {
+  if (id === S.conversationId) return;
+  S.conversationId = id;
+  S.convPageId     = null;
+  S.convOrigText   = '';
+  document.getElementById('conv-textarea').value = '';
+  document.getElementById('conv-missive-id').textContent = id || '—';
 
-    renderMainLoading(S.main);
-    renderOthers(S.others, id);
-    loadConvInstructions(id);
-    loadTasks(id);
+  const participants = extractParticipants(conversation);
+  S.participants = participants;
+  if (!participants.length) { renderNoContact(); return; }
 
-    // Tente d'extraire le subject de la conversation pour le brief podcast
-    const msg = conversation?.latest_message || conversation?.messages?.[0];
-    S.convSubject = msg?.subject || conversation?.subject || '';
+  S.main   = participants[0];
+  S.others = participants.slice(1);
 
-    await ensureIndex();
-    if (id !== S.conversationId) return;
-    const notionData = await lookupInNotion(S.main);
-    if (id !== S.conversationId) return;
-    S.mainNotion = notionData;
-    renderMain(S.main, notionData);
-  });
+  renderMainLoading(S.main);
+  renderOthers(S.others, id);
+  loadConvInstructions(id);
+  loadTasks(id);
+
+  // Extrait le subject pour le brief podcast
+  const msg = conversation?.latest_message || conversation?.messages?.[0];
+  S.convSubject = msg?.subject || conversation?.subject || '';
+
+  await ensureIndex();
+  if (id !== S.conversationId) return;
+  const notionData = await lookupInNotion(S.main);
+  if (id !== S.conversationId) return;
+  S.mainNotion = notionData;
+  renderMain(S.main, notionData);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
