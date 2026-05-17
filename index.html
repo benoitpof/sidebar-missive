@@ -114,19 +114,19 @@
           <div class="panel-hint">Vérifier les champs pré-remplis avant envoi :</div>
           <div class="form-field">
             <label class="form-field-label">Signataire <span class="required-dot"></span></label>
-            <input name="signataire" type="text" value="Marc Castagnet" required>
+            <input name="signataire" type="text" required>
           </div>
           <div class="form-field">
             <label class="form-field-label">Email <span class="required-dot"></span></label>
-            <input name="email" type="email" value="marc.castagnet@icservices.com.hk" required>
+            <input name="email" type="email" required>
           </div>
           <div class="form-field">
             <label class="form-field-label">Société <span class="required-dot"></span></label>
-            <input name="societe" type="text" value="ICS Services Ltd." required>
+            <input name="societe" type="text" required>
           </div>
           <div class="form-field">
             <label class="form-field-label">Date d'effet <span class="required-dot"></span></label>
-            <input name="date" type="date" value="2026-05-17" required>
+            <input name="date" type="date" required>
           </div>
           <div class="field-error" hidden>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z"/><path d="M12 16h.01"/></svg>
@@ -160,18 +160,18 @@
 
         <div class="form-field">
           <label class="form-field-label">Nom</label>
-          <input name="name" type="text" id="task-name" value="Répondre à Marc Castagnet sur l'entrée au capital ICS">
+          <input name="name" type="text" id="task-name" placeholder="Action courte, ex : Répondre à X sur Y">
         </div>
 
         <div class="form-field">
           <label class="form-field-label">Description</label>
-          <textarea id="task-desc" rows="3">Marc propose 100K€ via ICS Services. Confirmer participation, demander accord pour appel cette semaine. Ne pas s'engager sur valorisation avant validation Benoît.</textarea>
+          <textarea id="task-desc" rows="3" placeholder="Contexte + recommandation tactique"></textarea>
         </div>
 
         <div class="form-row">
           <div class="form-field">
             <label class="form-field-label">Deadline</label>
-            <input name="deadline" type="date" id="task-deadline" value="2026-05-20">
+            <input name="deadline" type="date" id="task-deadline">
           </div>
           <div class="form-field">
             <label class="form-field-label">Priorité</label>
@@ -406,7 +406,7 @@
   </script>
 
   <!-- Sidebar logic -->
-  <script src="sidebar.js?v=12"></script>
+  <script src="sidebar.js?v=13"></script>
 
 </body>
 </html>

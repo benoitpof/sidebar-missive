@@ -565,6 +565,9 @@ async function handleConversation(id, conversation) {
   const msg = conversation?.latest_message || conversation?.messages?.[0];
   S.convSubject = msg?.subject || conversation?.subject || '';
 
+  // Pré-remplit le formulaire de tâche (respecte les champs dirty)
+  prefillTaskForm();
+
   await ensureIndex();
   if (id !== S.conversationId) return;
   const notionData = await lookupInNotion(S.main);
@@ -577,6 +580,7 @@ window.addEventListener('DOMContentLoaded', () => {
   bootMissive();
   setupTaskActions();
   setupTaskBacklog();
+  setupDirtyTracking();
 });
 
 /* ════════════════════════════════════════════════════════
@@ -622,30 +626,42 @@ function togglePanel(triggerSel, panelId) {
 /* ════════════════════════════════════════════════════════
    TASK ACTIONS
    ════════════════════════════════════════════════════════ */
+/* Helper : fire action then show checkmark on success, toast on error. */
+function fireAndConfirm(rowEl, actionName, payload, successMsg) {
+  if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+  flashRow(rowEl);
+  // Toast immédiat pour confirmer la prise en compte
+  toast(successMsg);
+  // Marker visuel persistant sur la flèche
+  flashActionSuccess(rowEl);
+  // Sync background ; si échec, rollback du checkmark + toast erreur
+  callProxy(actionName, { conversation_id: S.conversationId, ...payload }).then(r => {
+    if (!r?.success) {
+      // Restaure la flèche et signale l'erreur
+      const arrow = rowEl.querySelector('.action-arrow');
+      if (arrow) delete arrow.dataset.success;
+      toast(r?.error || 'Erreur action', 'error');
+    }
+  }).catch(() => toast('Erreur réseau', 'error'));
+}
+
 function setupTaskActions() {
   // Briefing podcast — appel direct webhook avec contexte
   const briefBtn = document.querySelector('[data-action="brief-podcast"]');
-  if (briefBtn) briefBtn.addEventListener('click', async () => {
-    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
-    flashRow(briefBtn);
-    const r = await callProxy('brief_podcast', {
-      conversation_id: S.conversationId,
+  if (briefBtn) briefBtn.addEventListener('click', () => {
+    fireAndConfirm(briefBtn, 'brief_podcast', {
       subject: S.convSubject || '',
       main:    S.main,
       others:  S.others,
       person_instructions: S.mainNotion?.person_instructions || '',
       conv_instructions:   S.convOrigText || '',
-    });
-    toast(r?.success ? 'Briefing podcast envoyé' : (r?.error || 'Erreur'), r?.success ? 'success' : 'error');
+    }, 'Briefing podcast envoyé');
   });
 
   // Estimer l'opportunité — one-shot
   const estBtn = document.querySelector('[data-action="estimate-opp"]');
-  if (estBtn) estBtn.addEventListener('click', async () => {
-    if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
-    flashRow(estBtn);
-    const r = await callProxy('estimate_opportunity', { conversation_id: S.conversationId });
-    toast(r?.success ? 'Estimation en cours — résultat en commentaire' : (r?.error || 'Erreur'), r?.success ? 'success' : 'error');
+  if (estBtn) estBtn.addEventListener('click', () => {
+    fireAndConfirm(estBtn, 'estimate_opportunity', {}, 'Estimation en cours — résultat en commentaire');
   });
 
   // Toggle panels
@@ -659,55 +675,67 @@ function setupTaskActions() {
     setTimeout(prefillNdaForm, 0);
   });
 
-  // Watch chips → écrit dans le champ Briefing veille du contact principal
+  // Watch chips → écrit dans le champ Briefing veille du contact principal (optimistic)
   document.querySelectorAll('[data-watch]').forEach(chip => {
-    chip.addEventListener('click', async () => {
+    chip.addEventListener('click', () => {
       if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
       if (!S.mainNotion?.notion_page_id && !S.main?.email) {
-        toast('Contact non identifié', 'error');
-        return;
+        toast('Contact non identifié', 'error'); return;
       }
       chip.classList.add('selected');
       const cat = chip.dataset.watch;
-      const r = await callProxy('add_to_watch', {
+      const label = chip.textContent.trim();
+      // Toast immédiat
+      toast(`Ajouté à la veille « ${label} »`);
+      // Checkmark sur la flèche du bouton parent
+      const parentRow = document.querySelector('[data-action="add-to-watch"]');
+      flashActionSuccess(parentRow);
+      setTimeout(() => chip.classList.remove('selected'), 1200);
+      // Sync background
+      callProxy('add_to_watch', {
         category: cat,
         conversation_id: S.conversationId,
         contact_page_id: S.mainNotion?.notion_page_id,
         contact_email:   S.main?.email,
         contact_name:    S.main?.name,
+      }).then(r => {
+        if (!r?.success) {
+          const arrow = parentRow?.querySelector('.action-arrow');
+          if (arrow) delete arrow.dataset.success;
+          toast(r?.error || 'Erreur veille', 'error');
+        }
       });
-      if (r?.success) toast(`Ajouté à la veille « ${chip.textContent.trim()} »`);
-      else            toast(r?.error || 'Erreur veille', 'error');
-      setTimeout(() => chip.classList.remove('selected'), 1200);
     });
   });
 
-  // Brief reply → append à Instruction spécifique de la conversation
+  // Brief reply → append à Instruction spécifique de la conv (optimistic)
   const replyBtn = document.getElementById('reply-submit');
-  if (replyBtn) replyBtn.addEventListener('click', async () => {
+  if (replyBtn) replyBtn.addEventListener('click', () => {
     const ta = document.getElementById('reply-instructions');
     if (!ta.value.trim()) { ta.focus(); return; }
-    replyBtn.disabled = true;
-    replyBtn.innerHTML = `<div class="spinner"></div> Envoi…`;
-    const r = await callProxy('brief_reply', {
-      instructions: ta.value,
+    const instructions = ta.value;
+    // UX immédiate : ferme le panneau, reset, toast, checkmark
+    ta.value = '';
+    document.querySelector('[data-action="brief-reply"]')?.click();
+    toast('Brief enregistré sur la conversation');
+    flashActionSuccess(document.querySelector('[data-action="brief-reply"]'));
+    // Sync background
+    callProxy('brief_reply', {
+      instructions,
       conversation_id: S.conversationId,
+    }).then(r => {
+      if (!r?.success) {
+        const arrow = document.querySelector('[data-action="brief-reply"] .action-arrow');
+        if (arrow) delete arrow.dataset.success;
+        toast(r?.error || 'Erreur brief', 'error');
+      }
     });
-    replyBtn.disabled = false;
-    replyBtn.innerHTML = 'Lancer';
-    if (r?.success) {
-      ta.value = '';
-      document.querySelector('[data-action="brief-reply"]')?.click();
-      toast('Brief enregistré sur la conversation');
-    } else {
-      toast(r?.error || 'Erreur brief', 'error');
-    }
   });
 
-  // NDA submit + validation
+  // NDA submit + validation (optimistic)
   const ndaBtn = document.getElementById('nda-submit');
-  if (ndaBtn) ndaBtn.addEventListener('click', async () => {
-    const form = document.getElementById('nda-panel'); // l'id réel du <form>
+  if (ndaBtn) ndaBtn.addEventListener('click', () => {
+    const form = document.getElementById('nda-panel');
     if (!form) return;
     let valid = true;
     form.querySelectorAll('[required]').forEach(input => {
@@ -717,19 +745,20 @@ function setupTaskActions() {
     const err = form.querySelector('.field-error');
     if (!valid) { if (err) err.removeAttribute('hidden'); return; }
     if (err) err.setAttribute('hidden', '');
-    ndaBtn.disabled = true;
-    ndaBtn.innerHTML = `<div class="spinner"></div> Envoi…`;
     const data = {};
     form.querySelectorAll('input').forEach(i => { data[i.name] = i.value; });
-    const r = await callProxy('send_nda', { ...data, conversation_id: S.conversationId });
-    ndaBtn.disabled = false;
-    ndaBtn.innerHTML = 'Envoyer le NDA';
-    if (r?.success) {
-      document.querySelector('[data-action="sign-nda"]')?.click();
-      toast('NDA envoyé');
-    } else {
-      toast(r?.error || 'Erreur NDA', 'error');
-    }
+    // UX immédiate
+    document.querySelector('[data-action="sign-nda"]')?.click();
+    toast('NDA envoyé');
+    flashActionSuccess(document.querySelector('[data-action="sign-nda"]'));
+    // Sync background
+    callProxy('send_nda', { ...data, conversation_id: S.conversationId }).then(r => {
+      if (!r?.success) {
+        const arrow = document.querySelector('[data-action="sign-nda"] .action-arrow');
+        if (arrow) delete arrow.dataset.success;
+        toast(r?.error || 'Erreur NDA', 'error');
+      }
+    });
   });
 }
 
@@ -754,6 +783,59 @@ function flashRow(row) {
   setTimeout(() => { row.style.borderColor = ''; row.style.background = ''; }, 600);
 }
 
+/* Remplace la flèche d'une action-row par un checkmark teal pendant 2.5s,
+   pour confirmation visuelle persistante (le toast peut être manqué). */
+function flashActionSuccess(rowEl) {
+  if (!rowEl) return;
+  const arrow = rowEl.querySelector('.action-arrow');
+  if (!arrow) return;
+  const original = arrow.innerHTML;
+  arrow.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="var(--pof-teal-dark)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"><path d="M5 12l5 5l10 -10"/></svg>`;
+  arrow.dataset.success = '1';
+  setTimeout(() => {
+    if (arrow.dataset.success === '1') {
+      arrow.innerHTML = original;
+      delete arrow.dataset.success;
+    }
+  }, 2500);
+}
+
+/* Dirty tracking : tag un input/textarea/segmented quand l'utilisateur
+   l'a modifié manuellement. Toute fonction de prefill vérifie le flag. */
+function markDirty(el) { if (el) el.dataset.dirty = '1'; }
+function isDirty(el)   { return el && el.dataset.dirty === '1'; }
+function clearDirty(el){ if (el) delete el.dataset.dirty; }
+
+function setupDirtyTracking() {
+  ['task-name', 'task-desc', 'task-deadline'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => markDirty(el), { once: true });
+  });
+  document.querySelectorAll('#task-prio .seg, #task-assignee .seg').forEach(seg => {
+    seg.addEventListener('click', () => markDirty(seg.parentElement), { once: true });
+  });
+}
+
+/* Pré-remplit le formulaire de tâche depuis le contact courant.
+   Respecte les champs dirty (l'utilisateur a déjà tapé). */
+function prefillTaskForm() {
+  const name = document.getElementById('task-name');
+  const desc = document.getElementById('task-desc');
+  const deadline = document.getElementById('task-deadline');
+
+  if (name && !isDirty(name) && S.main?.name) {
+    name.value = `Répondre à ${S.main.name}`;
+  }
+  if (desc && !isDirty(desc) && S.convSubject) {
+    desc.value = `Sujet : ${S.convSubject}`;
+  }
+  if (deadline && !isDirty(deadline)) {
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    deadline.value = d.toISOString().slice(0, 10);
+  }
+}
+
 /* ════════════════════════════════════════════════════════
    ENRICH CONTACT (Contact pane)
    ════════════════════════════════════════════════════════ */
@@ -769,27 +851,24 @@ function setupEnrichContact() {
     else panel.setAttribute('hidden', '');
   });
 
-  if (submit) submit.addEventListener('click', async () => {
+  if (submit) submit.addEventListener('click', () => {
     const ta = document.getElementById('enrich-instructions');
     if (!ta?.value.trim()) { ta?.focus(); return; }
-    submit.disabled = true;
-    submit.innerHTML = `<div class="spinner"></div> Lancement…`;
-    const r = await callProxy('enrich_contact', {
+    const instructions = ta.value;
+    // UX immédiate : ferme le panneau, reset, toast
+    ta.value = '';
+    btn.click();
+    toast('Briefing veille mis à jour');
+    // Sync background
+    callProxy('enrich_contact', {
       conversation_id: S.conversationId,
-      instructions: ta?.value || '',
+      instructions,
       contact_page_id: S.mainNotion?.notion_page_id,
       contact_email:   S.main?.email,
       contact_name:    S.main?.name,
+    }).then(r => {
+      if (!r?.success) toast(r?.error || 'Erreur enrichissement', 'error');
     });
-    submit.disabled = false;
-    submit.innerHTML = 'Lancer l\'enrichissement';
-    if (r?.success) {
-      if (ta) ta.value = '';
-      btn.click();
-      toast('Briefing veille mis à jour');
-    } else {
-      toast(r?.error || 'Erreur enrichissement', 'error');
-    }
   });
 }
 
@@ -851,9 +930,9 @@ function renderTasks() {
       ? `<span class="meta-item">${icon('human')} Humain</span>`
       : `<span class="meta-item">${icon('robot')} IA</span>`;
     return `
-      <div class="task-item ${t.done ? 'done' : ''}" data-id="${esc(t.id)}">
-        <button class="task-check" data-task-toggle="${esc(t.id)}" aria-label="Cocher">
-          ${icon('check')}
+      <div class="task-item ${t.done ? 'done' : ''} ${t._pending ? 'pending' : ''}" data-id="${esc(t.id)}" ${t._pending ? 'style="opacity:.55"' : ''}>
+        <button class="task-check" data-task-toggle="${esc(t.id)}" aria-label="Cocher" ${t._pending ? 'disabled' : ''}>
+          ${t._pending ? '<div class="spinner" style="width:11px;height:11px"></div>' : icon('check')}
         </button>
         <div class="task-info">
           <div class="task-name">${esc(t.name)}</div>
@@ -886,42 +965,61 @@ async function toggleTask(id) {
   toast(t.done ? 'Tâche validée' : 'Tâche réouverte');
 }
 
-async function createTask() {
-  const btn = document.getElementById('task-create');
-  const name = document.getElementById('task-name').value.trim();
-  const desc = document.getElementById('task-desc').value.trim();
-  const deadline = document.getElementById('task-deadline').value;
+/* Création optimiste :
+   1. Confirme immédiatement (toast + tâche en tête de liste avec marker "pending")
+   2. Reset le form pour que l'utilisateur enchaîne
+   3. Sync en arrière-plan; rollback si échec
+*/
+function createTask() {
+  if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
+  const nameEl = document.getElementById('task-name');
+  const descEl = document.getElementById('task-desc');
+  const deadlineEl = document.getElementById('task-deadline');
+  const name = nameEl.value.trim();
+  if (!name) { nameEl.focus(); return; }
+  const desc = descEl.value.trim();
+  const deadline = deadlineEl.value;
+  const prio = TaskState.prio;
+  const assignee = TaskState.assignee;
 
-  if (!name) { document.getElementById('task-name').focus(); return; }
+  // 1. Optimistic UI : ajout immédiat à la liste
+  const tempId = 'pending-' + Date.now();
+  const ghost = {
+    id: tempId, name, prio, assignee, deadline,
+    done: false, notion_url: '#', _pending: true
+  };
+  TaskState.tasks.unshift(ghost);
+  renderTasks();
 
-  btn.disabled = true;
-  btn.innerHTML = `<div class="spinner"></div> Création…`;
+  // 2. Reset form + clear dirty pour repartir frais
+  nameEl.value = ''; clearDirty(nameEl);
+  descEl.value = ''; clearDirty(descEl);
+  // Garde deadline + prio + assignee comme défauts pour la prochaine tâche
 
-  const r = await callProxy('create_task', {
+  toast('Tâche créée dans Notion');
+
+  // 3. Sync en arrière-plan
+  callProxy('create_task', {
     conversation_id: S.conversationId,
-    name, description: desc, deadline,
-    prio: TaskState.prio,
-    assignee: TaskState.assignee,
+    name, description: desc, deadline, prio, assignee,
+  }).then(r => {
+    const idx = TaskState.tasks.findIndex(t => t.id === tempId);
+    if (idx < 0) return; // tâche supprimée entre-temps
+    if (r?.success && r.task) {
+      // Remplace le ghost par la vraie tâche Notion
+      TaskState.tasks[idx] = { ...r.task, _pending: false };
+      renderTasks();
+    } else if (!r?.success) {
+      // Rollback : retire la tâche, toast d'erreur
+      TaskState.tasks.splice(idx, 1);
+      renderTasks();
+      toast(r?.error || 'Erreur création tâche', 'error');
+    }
+  }).catch(e => {
+    const idx = TaskState.tasks.findIndex(t => t.id === tempId);
+    if (idx >= 0) { TaskState.tasks.splice(idx, 1); renderTasks(); }
+    toast('Erreur réseau', 'error');
   });
-
-  btn.disabled = false;
-  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" style="width:13px;height:13px"><path d="M12 5l0 14"/><path d="M5 12l14 0"/></svg> Créer la tâche`;
-
-  if (r?.success) {
-    const newTask = r.task || {
-      id: 'tmp-' + Date.now(),
-      name, prio: TaskState.prio, assignee: TaskState.assignee,
-      deadline, done: false, notion_url: r.notion_url || '#',
-    };
-    TaskState.tasks.unshift(newTask);
-    renderTasks();
-    toast('Tâche créée dans Notion');
-    // Reset form name/desc so user sees it
-    document.getElementById('task-name').value = '';
-    document.getElementById('task-desc').value = '';
-  } else {
-    toast('Erreur création tâche', 'error');
-  }
 }
 
 function formatDeadline(iso) {
