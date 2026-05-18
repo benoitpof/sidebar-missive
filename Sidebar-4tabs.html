@@ -5,28 +5,105 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>POF Sidebar — Notion / Missive</title>
 
-  <!-- Cache-busting : empêche les navigateurs / iframe Missive de servir un HTML obsolète -->
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-
   <!-- Fonts (POF DS) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Raleway:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="sidebar.css?v=36">
+  <link rel="stylesheet" href="sidebar.css?v=33">
 </head>
 <body>
+
+  <!-- ═══════════════════════════════════════════════ EMPTY SHELL (no conversation) -->
+  <section class="empty-shell" id="empty-shell" data-screen-label="Aucune conversation" hidden>
+
+    <div class="es-hero">
+      <div class="es-art" aria-hidden="true">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4">
+          <path d="M10 22l8 0l4 6l20 0l4 -6l8 0"/>
+          <path d="M10 12h44a2 2 0 0 1 2 2v36a2 2 0 0 1 -2 2h-44a2 2 0 0 1 -2 -2v-36a2 2 0 0 1 2 -2z"/>
+        </svg>
+      </div>
+      <div class="es-title">Sélectionner une conversation</div>
+      <div class="es-sub">Choisis un mail à gauche pour afficher contact, contexte&nbsp;et&nbsp;actions.</div>
+    </div>
+
+    <div class="es-action-wrap">
+      <button class="es-cta" id="es-triage-btn" type="button">
+        <span class="es-cta-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/></svg>
+        </span>
+        <span class="es-cta-body">
+          <span class="es-cta-title">Lancer le triage automatique</span>
+          <span class="es-cta-sub">Analyse, archive et priorise la boîte de réception</span>
+        </span>
+        <span class="es-cta-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/></svg>
+        </span>
+      </button>
+      <div class="es-action-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        <span>L'agent ne traite que les mails non lus de l'Inbox principale.</span>
+      </div>
+    </div>
+
+    <div class="es-spacer"></div>
+
+    <div class="es-report-wrap" id="es-report-wrap">
+      <div class="label es-report-label">
+        <span class="label-with-icon">
+          <svg style="width:11px;height:11px;vertical-align:-1px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M12 7v5l3 3"/></svg>
+          Dernier triage
+        </span>
+        <span class="timeline-source">via Notion</span>
+      </div>
+
+      <a class="es-report-card" id="es-report-card" href="#" target="_blank" rel="noopener">
+        <div class="es-report-head">
+          <div class="es-report-title">
+            <span id="es-report-name">Rapport de triage — 17 mai</span>
+            <svg class="es-report-ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M17 7l-10 10"/><path d="M8 7h9v9"/></svg>
+          </div>
+          <div class="es-report-date" id="es-report-date">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+            <span>Aujourd'hui · 08:42</span>
+          </div>
+        </div>
+
+        <div class="es-stats">
+          <div class="es-stat">
+            <div class="es-stat-num" id="es-stat-tries">47</div>
+            <div class="es-stat-label">Triés</div>
+          </div>
+          <div class="es-stat es-stat-archive">
+            <div class="es-stat-num" id="es-stat-arch">32</div>
+            <div class="es-stat-label">Archivés</div>
+          </div>
+          <div class="es-stat es-stat-prio">
+            <div class="es-stat-num" id="es-stat-prio">
+              <span class="es-stat-dot" aria-hidden="true"></span>
+              <span>8</span>
+            </div>
+            <div class="es-stat-label">Prio 1</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+  </section>
 
   <!-- ═══════════════════════════════════════════════ TABS -->
   <div class="tabs-wrap">
     <nav class="tabs" role="tablist">
-      <button class="tab" data-pane="contact" role="tab">
+      <button class="tab" data-pane="task" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M5 3m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
+        Contenu
+      </button>
+      <button class="tab active" data-pane="contact" role="tab" aria-selected="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/></svg>
         Contact
       </button>
-      <button class="tab active" data-pane="conv" role="tab" aria-selected="true" data-comment-anchor="420827e861-button">
+      <button class="tab" data-pane="conv" role="tab">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M4 21v-13a3 3 0 0 1 3 -3h10a3 3 0 0 1 3 3v6a3 3 0 0 1 -3 3h-9l-4 4"/><path d="M8 9h8"/><path d="M8 13h6"/></svg>
         Conv.
       </button>
@@ -39,10 +116,62 @@
 
   <div class="scroll">
 
+    <!-- ── CONTENU ───────────────────────────────── -->
+    <section class="pane" id="pane-task" data-screen-label="Contenu">
+
+      <!-- 1. Résumé du mail -->
+      <div class="label label-with-hint" data-comment-anchor="2d431761f4-div">
+        <span class="label-with-icon">
+          <svg class="ai-wand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9">
+            <path d="M6 21l15 -15l-3 -3l-15 15l3 3"/>
+            <path d="M15 6l3 3"/>
+            <path d="M9 3a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/>
+            <path d="M19 13a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/>
+          </svg>
+          Résumé du mail
+        </span>
+        <button class="mini-podcast-btn" id="summary-podcast-btn" title="Générer un briefing podcast de ce mail">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M8 21l8 0"/><path d="M12 17l0 4"/></svg>
+          <span>Briefing podcast</span>
+        </button>
+      </div>
+      <div class="mail-summary" id="mail-summary">
+        <div class="waiting" style="padding:20px 8px">
+          <div class="spinner"></div>
+          <div class="msg">Analyse du contenu en cours…</div>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- 2. Pièces jointes -->
+      <div class="label">
+        Pièces jointes (<span id="attachments-count">0</span>)
+      </div>
+      <div class="attachment-list" id="attachment-list">
+        <div style="font-size:11.5px;color:var(--text-xmuted);padding:6px 4px;">Aucune pièce jointe.</div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- 3. Sources mentionnées (LinkedIn / web) -->
+      <div class="label label-with-hint">
+        <span class="label-with-icon">
+          <svg style="width:11px;height:11px;vertical-align:-1px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M9 15l6 -6"/><path d="M11 6l.463 -.536a5 5 0 0 1 7.072 7.072l-.534 .464"/><path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463"/></svg>
+          Sources identifiées (<span id="sources-count">0</span>)
+        </span>
+        <span class="ai-source">via IA</span>
+      </div>
+      <div class="source-list" id="source-list">
+        <div style="font-size:11.5px;color:var(--text-xmuted);padding:6px 4px;">Aucune source détectée.</div>
+      </div>
+
+    </section>
+
     <!-- ── CONTACT ───────────────────────────────── -->
-    <section class="pane" id="pane-contact" data-screen-label="Contact">
+    <section class="pane active" id="pane-contact" data-screen-label="Contact">
       <div class="contact-grid">
-        <div class="contact-main">
+        <div class="contact-main" data-comment-anchor="961067cdf5-div">
           <div class="label">Contact principal</div>
           <div id="main-contact">
             <div class="waiting">
@@ -74,14 +203,25 @@
           </div>
         </div>
 
-        <!-- RIGHT : Timeline unifiée — futur + passé -->
+        <!-- RIGHT : Échéances + historique (façon onglet Contact) -->
         <aside class="timeline-aside">
 
-          <!-- Anti-chronological timeline (future + past merged) -->
+          <!-- Upcoming key dates -->
+          <div class="label label-with-hint">
+            <span class="label-with-icon">
+              <svg style="width:11px;height:11px;vertical-align:-1px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3l0 4"/><path d="M8 3l0 4"/><path d="M4 11l16 0"/></svg>
+              Dates clés à venir (<span id="key-dates-count">0</span>)
+            </span>
+          </div>
+          <div class="key-dates" id="key-dates"></div>
+
+          <hr class="divider">
+
+          <!-- Anti-chronological timeline -->
           <div class="label label-with-hint">
             <span class="label-with-icon">
               <svg style="width:11px;height:11px;vertical-align:-1px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/></svg>
-              Timeline
+              Historique des interactions
             </span>
             <span class="timeline-source">via Notion</span>
           </div>
@@ -91,88 +231,16 @@
       </div>
     </section>
 
-    <!-- ── CONVERSATION (fused : feedback + instructions + résumé + PJ + sources) ── -->
-    <section class="pane active" id="pane-conv" data-screen-label="Conversation">
-
-      <!-- 2. Instructions conversation -->
+    <!-- ── CONVERSATION ──────────────────────────── -->
+    <section class="pane" id="pane-conv" data-screen-label="Conversation">
       <div class="label">Instructions conversation</div>
       <p class="intro">
         Ces instructions sont accessibles par les agents de traitement pour contextualiser leurs actions sur cette conversation.
       </p>
-      <textarea id="conv-textarea" rows="5" placeholder="Ex : Marc est en négociation avancée. Rester factuel, pas d'engagement tarifaire sans validation Benoît…"></textarea>
+      <textarea id="conv-textarea" rows="6" placeholder="Ex : Marc est en négociation avancée. Rester factuel, pas d'engagement tarifaire sans validation Benoît…"></textarea>
       <div class="save-bar">
         <button class="btn btn-ghost" onclick="resetConv()">Annuler</button>
         <button class="btn btn-primary" id="conv-save-btn" onclick="saveConv()">Sauvegarder</button>
-      </div>
-
-      <hr class="divider" style="margin-top:22px">
-
-      <!-- 3. Résumé de la conversation (éditable + checkbox podcast) -->
-      <div class="label label-with-hint">
-        <span class="label-with-icon">
-          <svg class="ai-wand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9">
-            <path d="M6 21l15 -15l-3 -3l-15 15l3 3"/>
-            <path d="M15 6l3 3"/>
-            <path d="M9 3a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/>
-            <path d="M19 13a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/>
-          </svg>
-          Résumé de la conversation
-        </span>
-        <label class="pod-include" title="Inclure dans le briefing podcast">
-          <input type="checkbox" id="pod-incl-summary" checked>
-          <span class="pod-include-label">Podcast</span>
-        </label>
-      </div>
-      <div class="summary-edit" id="summary-edit">
-        <div class="waiting" style="padding:18px 8px">
-          <div class="spinner"></div>
-          <div class="msg">Analyse du contenu en cours…</div>
-        </div>
-      </div>
-      <p class="intro intro-podcast-hint" id="summary-podcast-hint">
-        Tu peux éditer ce résumé pour briefer le podcast — ajoute des consignes d'angle, de ton, ou pointe les éléments à creuser.
-      </p>
-
-      <hr class="divider" style="margin-top:22px">
-
-      <!-- 4. Pièces jointes (avec checkbox podcast par item) -->
-      <div class="label">
-        Pièces jointes (<span id="attachments-count">0</span>)
-      </div>
-      <div class="attachment-list" id="attachment-list">
-        <div style="font-size:11.5px;color:var(--text-xmuted);padding:6px 4px;">Aucune pièce jointe.</div>
-      </div>
-
-      <hr class="divider" style="margin-top:22px">
-
-      <!-- 5. Bouton Briefing podcast (unique) — placé juste après les PJ -->
-      <div class="podcast-launch" id="podcast-launch">
-        <button class="btn-podcast-big" id="podcast-launch-btn" type="button">
-          <span class="bpb-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M8 21l8 0"/><path d="M12 17l0 4"/></svg>
-          </span>
-          <span class="bpb-body">
-            <span class="bpb-title">Lancer le briefing podcast</span>
-            <span class="bpb-sub" id="podcast-launch-sub">Résumé + <span id="pod-pj-count">0</span> pièce(s) jointe(s)</span>
-          </span>
-          <span class="bpb-arrow">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/></svg>
-          </span>
-        </button>
-      </div>
-
-      <hr class="divider" style="margin-top:24px">
-
-      <!-- 6. Sources identifiées -->
-      <div class="label label-with-hint">
-        <span class="label-with-icon">
-          <svg style="width:11px;height:11px;vertical-align:-1px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M9 15l6 -6"/><path d="M11 6l.463 -.536a5 5 0 0 1 7.072 7.072l-.534 .464"/><path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463"/></svg>
-          Sources identifiées (<span id="sources-count">0</span>)
-        </span>
-        <span class="ai-source">via IA</span>
-      </div>
-      <div class="source-list" id="source-list">
-        <div style="font-size:11.5px;color:var(--text-xmuted);padding:6px 4px;">Aucune source détectée.</div>
       </div>
 
       <hr class="divider" style="margin-top:24px">
@@ -188,7 +256,7 @@
   <!-- ═══════════════════════════════════════════════ AGENT CHAT DOCK -->
   <div class="agent-dock" id="agent-dock" data-state="collapsed">
     <button class="agent-thread-toggle" id="agent-thread-toggle" type="button" aria-expanded="false">
-      <span class="agent-dot"></span>
+      <span class="agent-dot" data-comment-anchor="1c695b7523-span"></span>
       <span class="agent-thread-meta">
         <span class="agent-thread-title">Agent</span>
         <span class="agent-thread-preview" id="agent-thread-preview">Pose-lui une question sur cette conversation…</span>
@@ -198,11 +266,17 @@
     </button>
 
     <div class="agent-thread" id="agent-thread" hidden>
+      <div class="agent-thread-empty" id="agent-thread-empty">
+        L'agent a accès à la conversation, au contact et à la situation. Demande-lui de chercher, vérifier, suggérer…
+      </div>
       <div class="agent-messages" id="agent-messages"></div>
     </div>
 
     <form class="agent-composer" id="agent-composer">
       <textarea id="agent-input" rows="1" placeholder="Demander à l'agent…" autocomplete="off"></textarea>
+      <button type="button" class="agent-mic" id="agent-mic" title="Dicter à la place" data-comment-anchor="8a802bc0aa-button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M8 21l8 0"/><path d="M12 17l0 4"/></svg>
+      </button>
       <button type="submit" class="agent-send" id="agent-send" title="Envoyer">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M10 14l11 -11"/><path d="M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5"/></svg>
       </button>
@@ -249,12 +323,12 @@
   </div>
 
   <!-- ═══════════════════════════════════ MOCK (preview only) ═══ -->
-  <!-- Mock activates ONLY when ?preview=1 is in the URL. En prod Missive,
-       la SDK script tag ci-dessous charge synchroniquement et fournit window.Missive. -->
   <script>
-    if (location.search.indexOf('preview=1') !== -1) {
+    // If Missive SDK is not present (i.e. we're previewing standalone),
+    // mount a mock so the design is reviewable.
+    if (!window.Missive) {
       window.__POF_MOCK = true;
-      window.__POF_DEMO_STATE = 'found'; // 'found' | 'folk' | 'missing' | 'loading' | 'empty'
+      window.__POF_DEMO_STATE = 'empty'; // 'found' | 'folk' | 'missing' | 'loading' | 'empty'
 
       // Mock Missive SDK
       window.Missive = {
@@ -367,6 +441,18 @@
               notion_page_url: 'https://notion.so/newly000created111page222',
             });
             // Task actions
+            if (action === 'last_triage_report') {
+              return resolve({
+                found: true,
+                title: 'Rapport de triage — 17 mai',
+                notion_page_id: 'triage000report111may17',
+                notion_page_url: 'https://notion.so/triage000report111may17',
+                run_at: '2026-05-17T08:42:00',
+                run_at_label: "Aujourd'hui · 08:42",
+                stats: { triaged: 47, archived: 32, priority_1: 8 },
+              });
+            }
+            if (action === 'run_triage') return resolve({ success: true });
             if (action === 'brief_podcast')        return resolve({ success: true });
             if (action === 'add_to_watch')         return resolve({ success: true });
             if (action === 'estimate_opportunity') return resolve({ success: true });
@@ -477,10 +563,6 @@
                   { date: '2026-06-01T09:00:00', title: 'Board ICS Hong Kong', type: 'meeting', url: 'https://notion.so/meet-board-hk', meta: 'Présentation finale' },
                 ],
                 interactions: [
-                  { id: 'i0', type: 'linkedin', date: '2026-05-16T10:30:00', author: 'Marc Castagnet',
-                    title: 'Échange LinkedIn — sujet impact',
-                    summary: 'Marc partage un article cleantech HK et demande l\'avis de POF sur l\'impact measurement framework. 4 messages, échange ouvert.',
-                    url: 'https://linkedin.com/messaging/thread/abc' },
                   { id: 'i1', type: 'whatsapp', date: '2026-05-15T17:42:00', author: 'Marc Castagnet',
                     summary: 'Marc demande confirmation dispo Benoît pour visio mercredi 20/05. Évoque besoin de boucler avant board ICS.',
                     url: 'https://wa.me/85298765432' },
@@ -504,18 +586,6 @@
                     title: 'NDA mutuel signé',
                     summary: 'Signature via DocuSign. Couverture 24 mois sur données financières et industrielles. Signataires : M. Castagnet (ICS) / B. Blancher (POF).',
                     url: 'https://notion.so/nda-ics-pof' },
-                  { id: 'i6b', type: 'mou', date: '2026-04-10T11:00:00',
-                    title: 'MOU — cadre de partenariat ICS',
-                    summary: 'Lettre d\'intention non-engageante signée. Pose le cadre : ticket cible 100 K€, calendrier indicatif, gouvernance souhaitée. Préalable au term-sheet contraignant.',
-                    url: 'https://notion.so/mou-ics-pof' },
-                  { id: 'i6c', type: 'note', date: '2026-04-08T16:45:00', author: 'Thibault Kheres',
-                    title: 'Notes — analyse term-sheet ICS v2',
-                    summary: 'Relecture term-sheet v2 côté POF. Points sensibles identifiés : (1) la clause de liquidation préférentielle à 2× est trop agressive, à ramener à 1×. (2) le siège observateur OK mais demander qu\'il soit non-rémunéré. (3) les protections anti-dilution full-ratchet doivent passer en weighted-average. À discuter avec Maître Renard avant retour ICS.',
-                    url: 'https://notion.so/note-analysis-ts-v2' },
-                  { id: 'i6d', type: 'contrat', date: '2026-03-28T09:30:00',
-                    title: 'Contrat de consultance — phase due diligence',
-                    summary: 'Contrat signé pour mission DD croisée (3 mois, 8 K€). Encadre les échanges techniques et financiers en amont du term-sheet. Confidentialité reprise du NDA.',
-                    url: 'https://notion.so/contrat-dd-ics' },
                   { id: 'i7', type: 'email', date: '2026-04-03T16:30:00', author: 'Esther Wong',
                     title: 'Intro & agenda board ICS',
                     summary: 'Esther confirme agenda board ICS pour 22/04. Demande pitch deck mis à jour 48h avant.',
@@ -569,9 +639,10 @@
             if (action === 'brief_attachment') return resolve({ success: true });
             if (action === 'follow_source')    return resolve({ success: true });
             if (action === 'ask_agent') {
-              // Demo: agent replaces the proposed tasks with two new ones
+              // Demo: agent replies + replaces proposed tasks
               return resolve({
                 success: true,
+                reply: "J'ai vérifié les échanges récents. Marc n'a pas mentionné d'autre term-sheet, mais je te suggère de poser explicitement la question pour sécuriser l'exclusivité. J'ai mis à jour les tâches proposées dans l'onglet Actions.",
                 proposed: [
                   { id: 'pa1', name: 'Demander à Marc s\'il a un term-sheet en cours ailleurs',
                     description: 'Confirmer exclusivité du deal avant d\'aligner la valorisation. Mentionner aussi le board ICS.',
@@ -642,18 +713,18 @@
     }
   </script>
 
-  <!-- Missive SDK (prod). URL officielle integrations.missiveapp.com. -->
-  <script src="https://integrations.missiveapp.com/missive.js"></script>
-
-  <!-- Si on est en mode preview, ré-applique le mock après la SDK -->
+  <!-- Missive SDK (prod) — loaded only when not in mock preview -->
   <script>
-    if (window.__POF_MOCK) {
-      window.Missive = { on(evt, cb) { window.__POF_MISSIVE_CB = cb; } };
+    if (!window.__POF_MOCK) {
+      const s = document.createElement('script');
+      s.src = 'https://missiveapp.com/open/sidebar-sdk/2.0/sdk.js';
+      s.async = false;
+      document.head.appendChild(s);
     }
   </script>
 
   <!-- Sidebar logic -->
-  <script src="sidebar.js?v=36"></script>
+  <script src="sidebar.js?v=33"></script>
 
 </body>
 </html>

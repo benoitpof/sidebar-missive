@@ -2962,6 +2962,13 @@ function setupAgentDock() {
   const mic       = document.getElementById('agent-mic');
   if (!dock || !toggle || !composer || !input) return;
 
+  // Open by default when no conversation has started yet.
+  // Check again after a short delay in case Missive resolves a conv quickly.
+  if (!S.conversationId) toggleAgentDock(true);
+  setTimeout(() => {
+    if (!S.conversationId && dock.dataset.state !== 'open') toggleAgentDock(true);
+  }, 800);
+
   // Auto-grow textarea
   input.addEventListener('input', () => {
     input.style.height = 'auto';
@@ -3073,14 +3080,11 @@ function sendAgentMessage() {
 
 function renderAgentMessages() {
   const list  = document.getElementById('agent-messages');
-  const empty = document.getElementById('agent-thread-empty');
   if (!list) return;
   if (!AgentState.messages.length) {
     list.innerHTML = '';
-    if (empty) empty.style.display = '';
     return;
   }
-  if (empty) empty.style.display = 'none';
   list.innerHTML = AgentState.messages.map(m => {
     if (m._thinking) {
       return `
