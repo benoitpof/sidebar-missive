@@ -1,0 +1,80 @@
+# Changelog — POF Missive Sidebar
+
+Versions notables. Date au format YYYY-MM-DD.
+
+## v1.9.1 — 2026-05-17
+
+**Fix Missive `/posts` payload** : ajout du champ `notification` (title + body) requis par l'API Missive pour les commentaires d'équipe. Sans ça, l'analyse juridique ne se postait pas en commentaire.
+
+## v1.9 — 2026-05-17
+
+**3 stubs implémentés en versions réelles** (specs Notion validées par Benoit).
+
+- `ask_agent` (Spec 2) : détection intent par mots-clés LARGE (draft court/long, résumé, tâche, veille, podcast, légal, chat), délégation Drafter A (Haiku) ou Drafter B (Sonnet), **création directe du brouillon Missive** (pas de validation, décision Benoit), chat libre Sonnet sur contexte enrichi
+- `regen_situation` (Spec 2) : Claude Haiku synthèse JSON `{summary, bullets[], risks[]}`, persistance Notion sur la Conv
+- `signature_action` (Spec 1) complet :
+  - `legal_analysis` : Missive API extraction PJ + Claude Sonnet analyse + commentaire Missive + Slack DM `#ai-assistan-legal` si signature requise
+  - `sign_documents` : queue Backlog + Slack DM (templates Odoo Sign en suspens)
+  - `generate_nda` : queue Backlog + Slack DM (template Odoo PDF en suspens)
+
+Helpers ajoutés : `missiveApi_`, `missiveCreateDraft_`, `missivePostComment_`, `missiveListMessages_`, `slackPost_`.
+
+## v1.8 — 2026-05-17
+
+**Frontend v3 (3 onglets)** : `Sidebar v3.html` devient `index.html`. Variante 4 onglets sauvegardée en `Sidebar-4tabs.html`. SPEC.md v6 marque la v3 comme "variante en cours de prod".
+
+Régressions handoff corrigées (5) : SDK URL `integrations.missiveapp.com/missive.js`, mock gating `?preview=1`, Folk silent background, cache localStorage TTL 6h, loading message dynamique.
+
+Meta `Cache-Control: no-cache` ajoutés à l'HTML.
+
+## v1.7 — 2026-05-17
+
+- Champ "Téléphone" (phone_number) ajouté à la base Personnes Notion
+- `extractPersonEnriched_()` : helper centralisé qui extrait vip, company, tags, phone, meetings (relation Notes)
+- `lookup_person` enrichi avec `with_meetings: true` option
+- `dump_persons` enrichi (sauf meetings pour rester léger)
+- Nouveau : `toggle_vip`, `add_phone_to_notion`, `list_proposed_tasks` (Claude analyse, retourne 0-3 tâches actionnables)
+
+## v1.6 — 2026-05-16
+
+Actions directes (pas de queue Backlog) :
+- `brief_podcast` : Anthropic puis POST direct webhook Zapier ElevenLabs
+- `add_to_watch` : append direct "Briefing veille" du contact + `Suivi veille=true` + Type de veille mappé
+- `enrich_contact` : append direct "Briefing veille"
+- `brief_reply` : append direct "Instruction spécifique" de la Conv
+
+`resolveContactPageId_` : fallback nom après email pour les fiches sans email rempli.
+
+## v1.5 — 2026-05-16
+
+**Tasks Backlog réel** : `list_tasks`, `create_task`, `toggle_task` wirés sur la base Notion Tasks Backlog avec lien automatique vers la Conversation via la relation `Tâche associée`.
+
+6 stubs IA (`brief_podcast`, `add_to_watch`, `estimate_opportunity`, `brief_reply`, `send_nda`, `enrich_contact`) qui créent des tâches Backlog en `Mode=Confier à l'IA` avec prompt typé.
+
+## v1.4 — 2026-05-16
+
+- `dump_persons` : index complet de la base Personnes en un appel paginé (pour cache local frontend)
+- `list_conv_tasks` : tâches Notion liées à une conversation via relation `Tâche associée`
+- API frontend : cache local sessionStorage TTL 30 min + matching local instantané + name fallback normalisé (sans accents)
+
+## v1.3 — 2026-05-16
+
+**Abandon MCP, switch vers Notion REST direct** : le MCP Notion (`mcp.notion.com/mcp`) utilise OAuth, incompatible avec notre integration token (`NOTION_API_TOKEN` Doppler). Refactor complet : appels Notion REST direct avec Bearer auth. Folk garde MCP via Zapier.
+
+Plus rapide, plus simple, plus prévisible.
+
+## v1.2 — 2026-05-16
+
+**Injection token OAuth dans `mcp_servers`** : pour bypass auth Notion MCP. Échec final, abandonné en v1.3.
+
+## v1.1 — 2026-05-16
+
+**Endpoint `setup_config` one-shot** : bootstrap autonome des Script Properties via `PropertiesService.setProperties()` (pluriel, bypass de la regex `setProperty` singulier du meta-deployer). Self-lock via `STATE_setup_done='1'`.
+
+Permet à Claude de configurer entièrement le GAS sans intervention manuelle dans l'éditeur Apps Script.
+
+## v1.0 — 2026-05-16
+
+**Premier déploiement** du proxy GAS. 6 endpoints initiaux : `lookup_person`, `create_person`, `update_person_instructions`, `lookup_conv`, `upsert_conv`, `lookup_folk`.
+
+Architecture proxy : frontend statique GitHub Pages → GAS Web App → Notion / Anthropic. Pattern Secrets_Proxy POF. Aucune clé Anthropic ni token Notion exposé côté frontend.
