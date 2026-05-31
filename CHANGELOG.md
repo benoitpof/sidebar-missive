@@ -1,6 +1,29 @@
+# POF Missive Sidebar
+
+Interface humaine légère sur l'écosystème POF, déployée comme sidebar dans Missive. Pas un nouveau système — un raccourci vers les pipelines existants (Missive Triage, Gestion documentaire, Morning Briefing).
 # Changelog — POF Missive Sidebar
 
 Versions notables. Date au format YYYY-MM-DD.
+
+## v1.10 — 2026-05-18
+
+**POF Agent Registry POC** (cf. [spec Notion](https://www.notion.so/371c2ce245e88143b9c3e30f0122958c)).
+
+Introduction d'un registre canonique des agents POF par fonction métier, accessible via API uniforme. Premier pas vers la séparation interface/agent : la sidebar deviendra à terme un client thin du registry, et d'autres surfaces (Cowork, Slack) pourront invoquer les mêmes agents.
+
+**7 agents migrés depuis l'existant inline** :
+- `marketing-comms/drafter-short` (Haiku) — ex Drafter A de Missive Triage
+- `marketing-comms/drafter-formal` (Sonnet) — ex Drafter B
+- `marketing-comms/podcast-briefer` (Sonnet) — ex brief_podcast
+- `business-deals/situation-summarizer` (Haiku, output JSON) — ex regen_situation
+- `business-deals/deal-analyst` (Sonnet, output JSON) — ex estimate_opportunity
+- `lawyer/legal-analyzer` (Sonnet, output JSON) — ex signature_action.legal_analysis
+- `ops-it/workflow-architect` (Sonnet) — nouveau
+
+**2 nouveaux endpoints** : `agent_invoke` (POST {action, token, agent, query, context, mode}) et `agent_list`.
+
+POC déployé dans le proxy missive-sidebar-proxy en attendant un GAS dédié. La sidebar continue d'utiliser ses prompts inline en parallèle — pas de breaking change. Migration prévue Phase 3 (semaine du 26/05).
+
 
 ## v1.9.1 — 2026-05-17
 

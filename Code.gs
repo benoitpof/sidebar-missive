@@ -42,7 +42,14 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.9' };       break;
+      case 'ping':                       result = { ok: true, version: '1.10', agents: Object.keys(AGENTS) }; break;
+      case 'agent_invoke':               result = handleAgentInvoke_(body);           break;
+      case 'agent_list':                 result = handleAgentList_();                 break;
+      // v1.10 — Spec 2 V1 (agent sidebar + apprentissage observationnel)
+      case 'reload_config':              result = handleReloadConfig_(body);          break;
+      case 'run_nightly_scan':           result = handleRunNightlyScan_(body);        break;
+      case 'setup_nightly_trigger':      result = handleSetupNightlyTrigger_(body);   break;
+      case 'update_outcome':             result = handleUpdateOutcome_(body);         break;
       case 'dump_persons':               result = handleDumpPersons_(body);           break;
       case 'lookup_person':              result = handleLookupPerson_(body);          break;
       case 'create_person':              result = handleCreatePerson_(body);          break;
@@ -77,7 +84,7 @@ function doPost(e) {
       case 'update_situation':           result = handleUpdateSituation_(body);       break;
       // Stubs : nécessitent une spec dédiée — voir Missive Sidebar Notion
       case 'regen_situation':            result = handleRegenSituation_(body);        break;
-      case 'ask_agent':                  result = handleAskAgent_(body);              break;
+      case 'ask_agent':                  result = handleAskAgentWithLogging_(body);   break;
       case 'signature_action':           result = handleSignatureAction_(body);       break;
       // Alias quand le frontend écrase la routing key avec action: 'legal_analysis|sign_documents|generate_nda'
       case 'legal_analysis':             result = handleSignatureAction_({ ...body, sub_action: 'legal_analysis' });  break;
@@ -92,7 +99,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.8' });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.10' });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1668,10 +1675,39 @@ function slackPost_(channel, text, blocks) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ASK AGENT (Spec 2)
+   ASK AGENT (Spec 2 V1 — build-20260518-agent-sidebar-missive-v1)
    Détection d'intent LARGE + délégation Drafter A/B + chat libre.
    Création de brouillon Missive DIRECTE (pas de validation, par décision Benoit).
+   V1.10 : ajout NLU fallback Haiku + log sidebar_interactions + feature flags.
    ═══════════════════════════════════════════════════════════════ */
+
+/* --- Constantes V1.10 (Spec 2 — Agent sidebar + apprentissage observationnel) --- */
+const SIDEBAR_CONFIG_PAGE_ID       = '364c2ce245e88197b7efcb9e9d7bafa7'; // Sidebar Agent Config (JSON dans content)
+const SIDEBAR_INTERACTIONS_DS_ID   = '258d4583-2d78-4068-bf80-59183230f29c'; // DB Sidebar Interactions
+const CONV_SITUATION_BULLETS_PROP  = 'Situation bullets';
+const CONV_SITUATION_RISKS_PROP    = 'Situation risks';
+const CONV_SITUATION_UPDATED_PROP  = 'Situation updated';
+const CONV_SITUATION_SOURCE_PROP   = 'Situation source';
+const SIDEBAR_CONFIG_CACHE_KEY     = 'sidebar_agent_config_v1';
+const SIDEBAR_CONFIG_CACHE_TTL_SEC = 300; // 5 minutes
+const SIDEBAR_AGENT_ID             = 'missive-sidebar-orchestrator';
+
+const SIDEBAR_DEFAULTS = {
+  enable_briefing_veille_autoappend: false,
+  enable_instruction_personne_autoappend: false,
+  enable_instruction_conv_autoappend: true,
+  intent_fallback_model: 'claude-haiku-4-5',
+  drafter_a_model: 'claude-haiku-4-5',
+  drafter_b_model: 'claude-sonnet-4-6',
+  context_tier_budget_tokens: 2400,
+  sidebar_interactions_log_full: true,
+  pattern_detection_threshold: 3,
+  pattern_detection_window_days: 7,
+  propose_confirm_required: ['instruction_personne', 'briefing_veille'],
+  auto_execute_on_explicit: true,
+  enable_cross_conversation_context: false,
+  weekly_digest_slack: false,
+};
 
 const INTENT_PATTERNS = {
   draft_short: /\b(r[ée]pond|r[ée]ponse|draft|brouillon|envoie|relance|confirm[ée])\b.*\b(court|bref|rapide|direct|3 lignes|simple)\b|\b(r[ée]pond.{0,30}court|court.{0,30}r[ée]pond)\b/i,
@@ -1944,15 +1980,20 @@ function handleRegenSituation_(body) {
   // Si return_only, ne persiste pas (utilisé en délégation ask_agent)
   if (body.return_only) return out;
 
-  // Persistance : append à Instruction spécifique de la Conv avec marqueur Situation
+  // Persistance V1.10 : écriture sur les 4 champs dédiés Situation (Spec 2 §10)
   try {
     var convPageId = ensureConvPage_(convId);
-    var instrProp = cfg_('CONV_INSTRUCTIONS_PROP') || 'Instruction spécifique';
-    var stamped = '— Situation (regen ' + out.updated_at.slice(0, 16) + ') —\n' +
-      out.summary + '\n\n' +
-      out.bullets.map(function (b) { return '• ' + b; }).join('\n') +
-      (out.risks.length ? '\n\nRisques :\n' + out.risks.map(function (r) { return '⚠ ' + r; }).join('\n') : '');
-    appendToRichText_(convPageId, instrProp, stamped);
+    var bulletsText = out.bullets.map(function (b) { return '• ' + b; }).join('\n');
+    var risksText   = out.risks.map(function (r) { return '⚠ ' + r; }).join('\n');
+    var sourceVal   = body.source_hint === 'humain' ? 'humain' :
+                      (body.source_hint === 'mixte' ? 'mixte' : 'ia');
+    updateConvSituationFields_(convPageId, {
+      summary: out.summary,
+      bullets: bulletsText,
+      risks: risksText,
+      updated_at: out.updated_at,
+      source: sourceVal,
+    });
     out.conv_page_id = convPageId;
   } catch (_e) {
     out.persist_error = String(_e && _e.message);
@@ -2005,6 +2046,222 @@ function parseJsonLoose_(s) {
   catch (_e) { return { error: 'invalid json from model', raw: clean.slice(0, 300) }; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ▼▼▼  POF AGENT REGISTRY  ▼▼▼
+   Registre canonique des agents POF par fonction métier.
+   Spec : https://www.notion.so/371c2ce245e88143b9c3e30f0122958c
+   POC v0.1 : 7 agents, intégré dans missive-sidebar-proxy en attendant un GAS dédié.
+
+   Endpoint :
+     POST /exec  { action: "agent_invoke", token, agent, query, context?, mode? }
+     POST /exec  { action: "agent_list", token }
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+const AGENTS = {
+
+  /* ──────────────── marketing-comms/ ──────────────── */
+
+  'marketing-comms/drafter-short': {
+    fn: 'marketing-comms',
+    role: 'Email court direct (3-5 lignes)',
+    model: 'claude-haiku-4-5',
+    max_tokens: 600,
+    system: 'Tu es Drafter A — Concis direct. Tu écris des réponses email en français, 3-5 lignes maximum, ton factuel et chaleureux. ' +
+      'Voix Impact Realist POF : assertif, technique sans jargon, pas de em-dashes, pas de filler. ' +
+      'Tu adresses la personne en respectant le Tutoiement détecté. ' +
+      'Tu signes "Benoit" (CEO Plastic Odyssey Factories). Tu ne donnes que le corps du mail, sans objet ni en-tête.',
+    permissions: { create_missive_draft: true },
+    notion_page: 'https://www.notion.so/362c2ce245e8814e8720f7defa8680da',
+  },
+
+  'marketing-comms/drafter-formal': {
+    fn: 'marketing-comms',
+    role: 'Email chaleureux structuré (6-12 lignes, bullets si actions multiples)',
+    model: ANTHROPIC_MODEL,
+    max_tokens: 1200,
+    system: 'Tu es Drafter B — Chaleureux structuré. Tu écris des réponses email en français, 6-12 lignes, ton relationnel et structuré (bullets si actions multiples). ' +
+      'Voix Impact Realist POF : assertif, technique sans jargon, pas de em-dashes, pas de filler. ' +
+      'Tu adresses la personne en respectant le Tutoiement détecté. ' +
+      'Tu signes "Benoit" (CEO Plastic Odyssey Factories). Tu ne donnes que le corps du mail, sans objet ni en-tête.',
+    permissions: { create_missive_draft: true },
+    notion_page: 'https://www.notion.so/362c2ce245e881308aa5ffdb7b7602ee',
+  },
+
+  'marketing-comms/podcast-briefer': {
+    fn: 'marketing-comms',
+    role: 'Brief audio 400-600 mots pour ElevenLabs',
+    model: ANTHROPIC_MODEL,
+    max_tokens: 1500,
+    system: 'Tu es un assistant exécutif POF qui rédige des briefings audio. Voix Impact Realist : assertif, pragmatique, technique sans jargon, sans filler. ' +
+      "Pas d'em-dashes. Démarre direct sur l'enjeu, sans préambule. Adresse Benoit en \"tu\". Chiffres en toutes lettres. 400-600 mots. Format briefing exécutif.",
+    permissions: { post_zapier_webhook: true },
+  },
+
+  /* ──────────────── business-deals/ ──────────────── */
+
+  'business-deals/situation-summarizer': {
+    fn: 'business-deals',
+    role: "Synthèse exécutive d'une conversation (bullets + risques)",
+    model: 'claude-haiku-4-5',
+    max_tokens: 700,
+    system: 'Tu génères une synthèse exécutive de conversation Missive pour Benoit, CEO POF. ' +
+      'Tu retournes TOUJOURS du JSON strict, jamais du markdown ni du texte libre : {"summary": "...", "bullets": ["..."], "risks": ["..."]}. ' +
+      'summary = 1 phrase qui dit "où on en est" (sans em-dashes). ' +
+      'bullets = 5 à 7 puces factuelles (actions prises, statuts, échéances mentionnées). ' +
+      'risks = 1 à 3 risques détectés (deadline qui approche, désaccord, sujet sensible). Tableaux vides si rien. ' +
+      "Si tu manques de contexte, summary commence par \"Contexte insuffisant —\" suivi de ce qui est connu, et bullets/risks restent vides. " +
+      "Tu ne demandes JAMAIS de précision à l'utilisateur, tu fais avec ce que tu as. Pas d'invention de chiffres ou de dates.",
+    permissions: { write_notion: true },
+    output_format: 'json',
+  },
+
+  'business-deals/deal-analyst': {
+    fn: 'business-deals',
+    role: "Estimation d'opportunité business",
+    model: ANTHROPIC_MODEL,
+    max_tokens: 1200,
+    system: "Tu évalues une opportunité business pour Plastic Odyssey Factories (POF, SAS française, économie circulaire plastique, focus Afrique de l'Ouest). " +
+      'Tu retournes UNIQUEMENT du JSON : {"score": 0-100, "scope": "commercial|partenariat|financement|recrutement|autre", ' +
+      '"size_estimate": "string", "probability": "low|medium|high", "deadline_pressure": "low|medium|high", ' +
+      '"next_steps": ["..."], "risks": ["..."], "recommendation": "..."}. ' +
+      "Tu réponds en français. Pas d'em-dashes.",
+    permissions: { write_notion: true },
+    output_format: 'json',
+  },
+
+  /* ──────────────── lawyer/ ──────────────── */
+
+  'lawyer/legal-analyzer': {
+    fn: 'lawyer',
+    role: "Analyse d'un document juridique (NDA / contrat / MOU / pacte)",
+    model: ANTHROPIC_MODEL,
+    max_tokens: 1500,
+    system: 'Tu es un assistant juridique pour Plastic Odyssey Factories (POF, SAS française). ' +
+      "Tu analyses un document juridique extrait d'un mail Missive et tu produis un rapport STRICT JSON : " +
+      '{"type": "NDA|Contrat de travail|Contrat corporate|MOU|Pacte d\'associés|Autre", ' +
+      '"verdict": "OK|ALERT|BLOCK", ' +
+      '"score_anomalie": 0-100, ' +
+      '"red_flags": ["..."], ' +
+      '"points_cles": ["..."], ' +
+      '"recommandation": "...", ' +
+      '"signature_requise": boolean, ' +
+      '"juridiction_detectee": "FR|SN|EN|Autre|Inconnue"}. ' +
+      'OK = peut être signé tel quel par Benoit. ALERT = points à vérifier avant signature. BLOCK = anomalies critiques, ne pas signer. ' +
+      'Score anomalie : 0 = standard POF, 100 = totalement non conforme. ' +
+      'Tu réponds en français, sans markdown autour du JSON.',
+    permissions: { post_missive_comment: true, send_slack: true, write_notion: true },
+    output_format: 'json',
+    slack_channel: '#ai-assistan-legal',
+  },
+
+  /* ──────────────── ops-it/ ──────────────── */
+
+  'ops-it/workflow-architect': {
+    fn: 'ops-it',
+    role: 'Conception et amélioration de workflows POF',
+    model: ANTHROPIC_MODEL,
+    max_tokens: 2000,
+    system: 'Tu es architecte de workflows pour Plastic Odyssey Factories. Tu conçois des automatisations en respectant les patterns POF : ' +
+      'Secrets_Proxy, Gate Keeper, Audit Trail, Event Bus, Code_KGMemory. ' +
+      "Tu réponds en français, factuel et précis. Pas d'em-dashes, pas de filler.",
+    permissions: { write_notion: true },
+  },
+};
+
+function handleAgentList_() {
+  var out = {};
+  Object.keys(AGENTS).forEach(function (k) {
+    var a = AGENTS[k];
+    out[k] = { fn: a.fn, role: a.role, model: a.model, permissions: a.permissions || {}, notion_page: a.notion_page || null };
+  });
+  return { ok: true, agents: out, count: Object.keys(AGENTS).length };
+}
+
+function handleAgentInvoke_(body) {
+  var startMs = Date.now();
+  var agentId = String(body.agent || '');
+  var query   = String(body.query || '').trim();
+  var ctx     = body.context || {};
+  var mode    = body.mode || 'fast';
+
+  if (!agentId) return { ok: false, error: 'agent required (ex: "marketing-comms/drafter-short")' };
+  if (!query)   return { ok: false, error: 'query required' };
+  if (!AGENTS[agentId]) return { ok: false, error: 'unknown agent: ' + agentId, available: Object.keys(AGENTS) };
+
+  var agent = AGENTS[agentId];
+  var model = agent.model;
+  // mode=deep upgrade Haiku → Sonnet si applicable
+  if (mode === 'deep' && model === 'claude-haiku-4-5') model = ANTHROPIC_MODEL;
+
+  var prompt = buildAgentPrompt_(agent, ctx, query);
+
+  var apiKey = getSecret_('ANTROPIC_API_TOKEN');
+  var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post', contentType: 'application/json',
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    payload: JSON.stringify({
+      model: model,
+      max_tokens: agent.max_tokens || 1000,
+      system: agent.system,
+      messages: [{ role: 'user', content: prompt }]
+    }),
+    muteHttpExceptions: true
+  });
+
+  var code = res.getResponseCode();
+  if (code !== 200) {
+    return { ok: false, agent: agentId, error: 'anthropic_' + code, detail: res.getContentText().slice(0, 400) };
+  }
+  var data = JSON.parse(res.getContentText());
+  var textBlock = (data.content || []).filter(function (b) { return b.type === 'text'; })[0];
+  var rawText = textBlock ? textBlock.text : '';
+
+  var parsedOutput = null;
+  if (agent.output_format === 'json') {
+    parsedOutput = parseJsonLoose_(rawText);
+  }
+
+  return {
+    ok: true,
+    agent: agentId,
+    model: model,
+    mode: mode,
+    reply: rawText,
+    output: parsedOutput,
+    proposed_actions: [],
+    side_effects: {},
+    tokens_used: (data.usage && (data.usage.input_tokens + data.usage.output_tokens)) || 0,
+    duration_ms: Date.now() - startMs
+  };
+}
+
+function buildAgentPrompt_(agent, ctx, query) {
+  var parts = [];
+  if (ctx.contact) {
+    parts.push('Contact principal : ' + (ctx.contact.name || '') + ' (' + (ctx.contact.email || '') + ')');
+    if (ctx.contact.company) parts.push('Société : ' + ctx.contact.company);
+    if (ctx.contact.tags && ctx.contact.tags.length) parts.push('Tags : ' + ctx.contact.tags.join(', '));
+  }
+  if (ctx.conversation_id) parts.push('Missive conversation : ' + ctx.conversation_id);
+  if (ctx.subject) parts.push('Sujet : ' + ctx.subject);
+  if (Array.isArray(ctx.others) && ctx.others.length) {
+    parts.push('Autres participants : ' + ctx.others.map(function (p) { return p.name || p.email; }).join(', '));
+  }
+  if (ctx.person_instructions) parts.push('\nInstructions Notion sur la personne :\n' + ctx.person_instructions);
+  if (ctx.conv_instructions)   parts.push('\nInstructions Notion sur la conversation :\n' + ctx.conv_instructions);
+  if (Array.isArray(ctx.attachments) && ctx.attachments.length) {
+    parts.push('\nPièces jointes :\n' + ctx.attachments.map(function (a) { return '  - ' + (a.filename || a.name); }).join('\n'));
+  }
+  if (ctx.document_text) parts.push('\n--- DOCUMENT ---\n' + String(ctx.document_text).slice(0, 6000));
+  parts.push('\nDate du jour : ' + new Date().toISOString().slice(0, 10));
+  parts.push('\n--- DEMANDE ---\n' + query);
+  return parts.join('\n');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ▲▲▲  POF AGENT REGISTRY  ▲▲▲
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
 /* ═══════════════════════════════════════════════════════════════
    getSecret_ — pattern Secrets_Proxy POF
    ═══════════════════════════════════════════════════════════════ */
@@ -2025,4 +2282,498 @@ function getSecret_(name) {
   if (parsed.error) throw new Error('Secret non trouve ou erreur proxy : ' + parsed.error);
   if (!parsed.value) throw new Error('Secret vide : ' + name);
   return parsed.value;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   V1.10 HELPERS — Spec 2 V1 (Agent sidebar + apprentissage observationnel)
+   Chain ID : build-20260518-agent-sidebar-missive-v1
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * Lit les feature flags depuis la page Notion Sidebar Agent Config.
+ * Cache CacheService 5 min. Tout flag manquant ou invalide → fallback default.
+ * Pour forcer un reload immédiat : POST {action:'reload_config'}.
+ */
+function getSidebarConfig_() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(SIDEBAR_CONFIG_CACHE_KEY);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (_e) { /* fall through */ }
+  }
+  var flags = {};
+  try {
+    // Récupère les blocs enfants de la page Config et cherche un code-block JSON
+    var url = 'https://api.notion.com/v1/blocks/' + SIDEBAR_CONFIG_PAGE_ID + '/children?page_size=100';
+    var token = getSecret_('NOTION_API_TOKEN');
+    var res = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: { 'Authorization': 'Bearer ' + token, 'Notion-Version': NOTION_API_VERSION },
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() === 200) {
+      var data = JSON.parse(res.getContentText());
+      var blocks = data.results || [];
+      for (var i = 0; i < blocks.length; i++) {
+        var b = blocks[i];
+        if (b.type === 'code' && b.code && (b.code.language === 'json' || !b.code.language)) {
+          var raw = (b.code.rich_text || []).map(function (rt) { return rt.plain_text || ''; }).join('');
+          var parsed = parseJsonLoose_(raw);
+          if (parsed && parsed.flags) { flags = parsed.flags; break; }
+        }
+      }
+    }
+  } catch (e) {
+    // Fail-open : on log et on tombe sur les defaults
+    Logger.log('getSidebarConfig_ error: ' + (e && e.message));
+  }
+  // Merge defaults + flags lus
+  var merged = {};
+  Object.keys(SIDEBAR_DEFAULTS).forEach(function (k) { merged[k] = SIDEBAR_DEFAULTS[k]; });
+  Object.keys(flags).forEach(function (k) { if (k in SIDEBAR_DEFAULTS) merged[k] = flags[k]; });
+  cache.put(SIDEBAR_CONFIG_CACHE_KEY, JSON.stringify(merged), SIDEBAR_CONFIG_CACHE_TTL_SEC);
+  return merged;
+}
+
+function handleReloadConfig_(_body) {
+  CacheService.getScriptCache().remove(SIDEBAR_CONFIG_CACHE_KEY);
+  var cfg = getSidebarConfig_();
+  return { ok: true, flags: cfg };
+}
+
+/**
+ * Écrit une entrée dans la DB Sidebar Interactions.
+ * Fire-and-forget : toute erreur est logguée mais ne fait pas échouer la requête principale.
+ * payload : {conv_id, person_id, session_id, user_query, intent, tools_called[], delegations[],
+ *            reply_excerpt, outcome, proposed_actions[], tokens_used, tier_loaded, human_in_loop}
+ */
+function logSidebarInteraction_(payload) {
+  try {
+    var cfg = getSidebarConfig_();
+    var logFull = cfg.sidebar_interactions_log_full !== false;
+    var ts = new Date().toISOString();
+    var convId = String(payload.conv_id || '').slice(0, 200);
+    var truncatedQuery = String(payload.user_query || '');
+    var truncatedReply = String(payload.reply_excerpt || '');
+    if (!logFull) {
+      // Mode méta-seul : hash sha256-like court (just length+head fallback for GAS)
+      truncatedQuery = '[hidden, len=' + truncatedQuery.length + ']';
+      truncatedReply = '[hidden, len=' + truncatedReply.length + ']';
+    } else {
+      truncatedQuery = truncatedQuery.slice(0, 1900);
+      truncatedReply = truncatedReply.slice(0, 1900);
+    }
+    var proposedStr = '';
+    if (Array.isArray(payload.proposed_actions) && payload.proposed_actions.length) {
+      proposedStr = JSON.stringify(payload.proposed_actions).slice(0, 1900);
+    }
+    var properties = {
+      'Title': { title: [{ text: { content: (payload.intent || 'unknown') + ' · ' + ts.slice(0, 16) + ' · ' + convId.slice(-12) } }] },
+      'Conv ID': { rich_text: [{ text: { content: convId } }] },
+      'Person ID': { rich_text: [{ text: { content: String(payload.person_id || '').slice(0, 200) } }] },
+      'Session ID': { rich_text: [{ text: { content: String(payload.session_id || '').slice(0, 200) } }] },
+      'Intent': { select: { name: _validIntent_(payload.intent) } },
+      'User query': { rich_text: [{ text: { content: truncatedQuery } }] },
+      'Reply excerpt': { rich_text: [{ text: { content: truncatedReply } }] },
+      'Outcome': { select: { name: _validOutcome_(payload.outcome) } },
+      'Proposed actions': { rich_text: [{ text: { content: proposedStr } }] },
+      'Tokens used': { number: Number(payload.tokens_used) || 0 },
+      'Tier loaded': { select: { name: _validTier_(payload.tier_loaded) } },
+      'Human in loop': { checkbox: payload.human_in_loop !== false },
+      'Timestamp': { date: { start: ts } },
+    };
+    var tools = (payload.tools_called || []).filter(function (t) { return !!t; }).slice(0, 9);
+    if (tools.length) properties['Tools called'] = { multi_select: tools.map(function (t) { return { name: t }; }) };
+    var delegations = (payload.delegations || []).filter(function (d) { return !!d; }).slice(0, 9);
+    if (delegations.length) properties['Delegations'] = { multi_select: delegations.map(function (d) { return { name: d }; }) };
+
+    var res = UrlFetchApp.fetch('https://api.notion.com/v1/pages', {
+      method: 'post', contentType: 'application/json',
+      headers: { 'Authorization': 'Bearer ' + getSecret_('NOTION_API_TOKEN'), 'Notion-Version': NOTION_API_VERSION },
+      payload: JSON.stringify({
+        parent: { database_id: SIDEBAR_INTERACTIONS_DS_ID },
+        properties: properties,
+      }),
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() >= 300) {
+      Logger.log('logSidebarInteraction_ http ' + res.getResponseCode() + ' : ' + res.getContentText().slice(0, 300));
+      return null;
+    }
+    var created = JSON.parse(res.getContentText());
+    return created.id || null;
+  } catch (e) {
+    Logger.log('logSidebarInteraction_ error: ' + (e && e.message));
+    return null;
+  }
+}
+
+function _validIntent_(s) {
+  var allowed = ['draft_short','draft_long','draft_any','summarize','task','watch','podcast','legal','chat','unknown'];
+  return allowed.indexOf(s) >= 0 ? s : 'unknown';
+}
+function _validOutcome_(s) {
+  var allowed = ['pending','accepted','edited','ignored','rejected','error'];
+  return allowed.indexOf(s) >= 0 ? s : 'pending';
+}
+function _validTier_(s) {
+  var allowed = ['couche0','couche0+couche1','couche0+couche1+couche2','minimal'];
+  return allowed.indexOf(s) >= 0 ? s : 'minimal';
+}
+
+/**
+ * Met à jour les 4 champs Situation sur une page Conversation Notion.
+ * fields : {summary, bullets (str), risks (str), updated_at (ISO), source ('ia'|'humain'|'mixte')}
+ */
+function updateConvSituationFields_(pageId, fields) {
+  var bullets = String(fields.bullets || '').slice(0, 1900);
+  var risks   = String(fields.risks || '').slice(0, 1900);
+  var dateVal = String(fields.updated_at || new Date().toISOString());
+  var props = {};
+  props[CONV_SITUATION_BULLETS_PROP] = { rich_text: [{ text: { content: bullets } }] };
+  props[CONV_SITUATION_RISKS_PROP]   = { rich_text: [{ text: { content: risks } }] };
+  props[CONV_SITUATION_UPDATED_PROP] = { date: { start: dateVal } };
+  props[CONV_SITUATION_SOURCE_PROP]  = { select: { name: fields.source || 'ia' } };
+  var res = UrlFetchApp.fetch('https://api.notion.com/v1/pages/' + pageId, {
+    method: 'patch', contentType: 'application/json',
+    headers: { 'Authorization': 'Bearer ' + getSecret_('NOTION_API_TOKEN'), 'Notion-Version': NOTION_API_VERSION },
+    payload: JSON.stringify({ properties: props }),
+    muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() >= 300) {
+    throw new Error('Conv situation update http ' + res.getResponseCode() + ' : ' + res.getContentText().slice(0, 300));
+  }
+  return true;
+}
+
+/**
+ * Met à jour le champ Outcome d'une interaction loggée (utilisé quand le frontend
+ * détecte que l'utilisateur a accepté/édité/ignoré la réponse de l'agent).
+ * body : {interaction_id, outcome}
+ */
+function handleUpdateOutcome_(body) {
+  var id = String(body.interaction_id || '');
+  var outcome = _validOutcome_(body.outcome);
+  if (!id) return { error: 'interaction_id required' };
+  var res = UrlFetchApp.fetch('https://api.notion.com/v1/pages/' + id, {
+    method: 'patch', contentType: 'application/json',
+    headers: { 'Authorization': 'Bearer ' + getSecret_('NOTION_API_TOKEN'), 'Notion-Version': NOTION_API_VERSION },
+    payload: JSON.stringify({ properties: { 'Outcome': { select: { name: outcome } } } }),
+    muteHttpExceptions: true,
+  });
+  return res.getResponseCode() < 300 ? { ok: true, outcome: outcome } : { error: 'http_' + res.getResponseCode() };
+}
+
+/**
+ * NLU fallback Haiku pour intent flou.
+ * Renvoie {intent, confidence} où intent ∈ INTENT_PATTERNS keys ou 'chat'.
+ * Activé quand detectIntent_ retourne 'chat' (aucun mot-clé matché).
+ */
+function intentFallbackNlu_(query, cfg) {
+  try {
+    var model = (cfg && cfg.intent_fallback_model) || 'claude-haiku-4-5';
+    var apiKey = getSecret_('ANTROPIC_API_TOKEN');
+    var system = 'Tu classes l\'intention d\'une requête utilisateur sur une sidebar de boîte mail. ' +
+      'Réponds en JSON strict : {"intent": "<one>", "confidence": 0-1}. ' +
+      'Intents possibles : draft_short, draft_long, summarize, task, watch, legal, podcast, chat. ' +
+      'Si la requête est une question d\'information ou autre, retourne "chat".';
+    var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+      method: 'post', contentType: 'application/json',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      payload: JSON.stringify({
+        model: model,
+        max_tokens: 80,
+        system: system,
+        messages: [{ role: 'user', content: 'Requête : ' + String(query).slice(0, 400) }],
+      }),
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() !== 200) return { intent: 'chat', confidence: 0, error: 'http_' + res.getResponseCode() };
+    var data = JSON.parse(res.getContentText());
+    var textBlock = (data.content || []).filter(function (b) { return b.type === 'text'; })[0];
+    var parsed = parseJsonLoose_(textBlock ? textBlock.text : '');
+    if (!parsed) return { intent: 'chat', confidence: 0 };
+    return { intent: _validIntent_(parsed.intent), confidence: Number(parsed.confidence) || 0 };
+  } catch (e) {
+    return { intent: 'chat', confidence: 0, error: String(e && e.message) };
+  }
+}
+
+/**
+ * Job nocturne : scanne sidebar_interactions des N derniers jours,
+ * group by (person_id, intent), seuil dépassé → push Feedback Atomic.
+ * Idempotence : dedupe par (person_id, intent, semaine YYYY-WW).
+ */
+function runNightlyPatternScan_() {
+  var cfg = getSidebarConfig_();
+  var threshold = Number(cfg.pattern_detection_threshold) || 3;
+  var windowDays = Number(cfg.pattern_detection_window_days) || 7;
+  var sinceIso = new Date(Date.now() - windowDays * 86400 * 1000).toISOString();
+
+  var token = getSecret_('NOTION_API_TOKEN');
+  var url = 'https://api.notion.com/v1/databases/' + SIDEBAR_INTERACTIONS_DS_ID + '/query';
+  var allResults = [];
+  var hasMore = true;
+  var nextCursor = null;
+  var pages = 0;
+  while (hasMore && pages < 10) {
+    var query = {
+      filter: { property: 'Timestamp', date: { on_or_after: sinceIso } },
+      page_size: 100,
+    };
+    if (nextCursor) query.start_cursor = nextCursor;
+    var res = UrlFetchApp.fetch(url, {
+      method: 'post', contentType: 'application/json',
+      headers: { 'Authorization': 'Bearer ' + token, 'Notion-Version': NOTION_API_VERSION },
+      payload: JSON.stringify(query),
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() !== 200) {
+      return { error: 'query_http_' + res.getResponseCode(), body: res.getContentText().slice(0, 300) };
+    }
+    var data = JSON.parse(res.getContentText());
+    allResults = allResults.concat(data.results || []);
+    hasMore = !!data.has_more;
+    nextCursor = data.next_cursor;
+    pages++;
+  }
+
+  // Group by (person_id, intent)
+  var groups = {};
+  allResults.forEach(function (page) {
+    var props = page.properties || {};
+    var personId = ((props['Person ID'] || {}).rich_text || []).map(function (r) { return r.plain_text || ''; }).join('').trim();
+    var intent = ((props['Intent'] || {}).select || {}).name || 'unknown';
+    if (!personId || personId === '') return; // ignore entries sans personne identifiée
+    var key = personId + '|' + intent;
+    if (!groups[key]) groups[key] = { person_id: personId, intent: intent, count: 0, samples: [] };
+    groups[key].count++;
+    if (groups[key].samples.length < 3) {
+      var q = ((props['User query'] || {}).rich_text || []).map(function (r) { return r.plain_text || ''; }).join('').slice(0, 120);
+      groups[key].samples.push(q);
+    }
+  });
+
+  // Filter groups above threshold
+  var triggered = Object.keys(groups).map(function (k) { return groups[k]; })
+    .filter(function (g) { return g.count >= threshold; });
+
+  // Dedupe par (person_id, intent, semaine)
+  var weekStamp = _isoWeekStamp_(new Date());
+  var posted = [];
+  for (var i = 0; i < triggered.length; i++) {
+    var g = triggered[i];
+    var dedupeKey = 'pattern_scan_' + weekStamp + '_' + g.person_id.slice(-12) + '_' + g.intent;
+    if (CacheService.getScriptCache().get(dedupeKey)) continue;
+    var ok = _pushFeedbackPattern_(g, windowDays, weekStamp);
+    if (ok) {
+      CacheService.getScriptCache().put(dedupeKey, '1', 7 * 86400); // cache 7 jours
+      posted.push({ person_id: g.person_id, intent: g.intent, count: g.count });
+    }
+    if (posted.length >= 5) break; // anti-spam : max 5 entrées par run
+  }
+
+  return { ok: true, scanned: allResults.length, groups: Object.keys(groups).length, triggered: triggered.length, posted: posted };
+}
+
+function _pushFeedbackPattern_(g, windowDays, weekStamp) {
+  try {
+    var title = '[Sidebar pattern] ' + g.count + ' requêtes "' + g.intent + '" sur ' + g.person_id.slice(-20) + ' (' + windowDays + 'j)';
+    var description =
+      'Pattern détecté par runNightlyPatternScan_ — semaine ' + weekStamp + '.\n\n' +
+      'Person ID : ' + g.person_id + '\n' +
+      'Intent : ' + g.intent + '\n' +
+      'Count : ' + g.count + ' / seuil ' + (Number(getSidebarConfig_().pattern_detection_threshold) || 3) + '\n' +
+      'Fenêtre : ' + windowDays + ' jours\n\n' +
+      'Exemples de requêtes :\n' +
+      g.samples.map(function (s) { return '• ' + s; }).join('\n') +
+      '\n\nSuggestion : enrichir le Briefing veille de cette Personne pour éviter de répéter cette question.';
+    // Écriture Feedback Atomic (réutilise le pattern existant handleSubmitFeedback_, mais on appelle directement)
+    var res = UrlFetchApp.fetch('https://api.notion.com/v1/pages', {
+      method: 'post', contentType: 'application/json',
+      headers: { 'Authorization': 'Bearer ' + getSecret_('NOTION_API_TOKEN'), 'Notion-Version': NOTION_API_VERSION },
+      payload: JSON.stringify({
+        parent: { database_id: FEEDBACK_DB_ID },
+        properties: {
+          'Name': { title: [{ text: { content: title.slice(0, 200) } }] },
+          'Type': { select: { name: 'improvement' } },
+          'Domain': { select: { name: 'Agent' } },
+          'Severity': { select: { name: 'low' } },
+          'Status': { select: { name: 'Pending' } },
+          'Source': { select: { name: 'agent' } },
+          'Description': { rich_text: [{ text: { content: description.slice(0, 1900) } }] },
+        },
+      }),
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() >= 300) {
+      Logger.log('_pushFeedbackPattern_ http ' + res.getResponseCode() + ' : ' + res.getContentText().slice(0, 300));
+      return false;
+    }
+    return true;
+  } catch (e) {
+    Logger.log('_pushFeedbackPattern_ error: ' + (e && e.message));
+    return false;
+  }
+}
+
+function _isoWeekStamp_(d) {
+  // YYYY-WW format pour dedupe hebdomadaire
+  var target = new Date(d.valueOf());
+  var dayNr = (d.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  var firstThursday = target.valueOf();
+  target.setUTCMonth(0, 1);
+  if (target.getUTCDay() !== 4) {
+    target.setUTCMonth(0, 1 + ((4 - target.getUTCDay()) + 7) % 7);
+  }
+  var week = 1 + Math.ceil((firstThursday - target) / 604800000);
+  return d.getUTCFullYear() + '-W' + (week < 10 ? '0' + week : week);
+}
+
+function handleRunNightlyScan_(_body) {
+  return runNightlyPatternScan_();
+}
+
+/**
+ * Crée (ou recrée) le trigger time-driven du job nocturne.
+ * À appeler manuellement une seule fois via POST {action:'setup_nightly_trigger'}.
+ * Le trigger se déclenche tous les jours à 2-3h Europe/Paris.
+ */
+function handleSetupNightlyTrigger_(_body) {
+  // Supprime les triggers existants pour runNightlyPatternScan_
+  var existing = ScriptApp.getProjectTriggers();
+  var removed = 0;
+  for (var i = 0; i < existing.length; i++) {
+    if (existing[i].getHandlerFunction() === 'runNightlyPatternScan_') {
+      ScriptApp.deleteTrigger(existing[i]);
+      removed++;
+    }
+  }
+  // Crée un nouveau trigger : tous les jours à 2h (heure projet, Europe/Paris si bien configuré)
+  ScriptApp.newTrigger('runNightlyPatternScan_')
+    .timeBased()
+    .everyDays(1)
+    .atHour(2)
+    .create();
+  return { ok: true, removed: removed, created: 1, handler: 'runNightlyPatternScan_' };
+}
+
+/**
+ * Wrapper de handleAskAgent_ : applique le NLU fallback si intent flou,
+ * appelle le handler original, puis loggue dans sidebar_interactions.
+ * Retourne le résultat enrichi de {interaction_id, session_id} pour permettre
+ * au frontend de remonter l'outcome via update_outcome.
+ */
+function handleAskAgentWithLogging_(body) {
+  var cfg = getSidebarConfig_();
+
+  // Session per conversation : récupère ou génère un session_id court
+  var sessionId = String(body.session_id || '');
+  if (!sessionId) {
+    sessionId = 'sb_' + Utilities.getUuid().replace(/-/g, '').slice(0, 16);
+  }
+  body.session_id = sessionId;
+
+  // NLU fallback : si intent vide / 'chat' et la query a >5 mots, tenter Haiku
+  var rawIntent = String(body.intent || '') || detectIntent_(body.query || '');
+  var fallbackUsed = false;
+  if ((rawIntent === 'chat' || !rawIntent) && String(body.query || '').split(/\s+/).length > 4) {
+    var nlu = intentFallbackNlu_(body.query, cfg);
+    if (nlu && nlu.intent && nlu.intent !== 'chat' && (nlu.confidence || 0) >= 0.6) {
+      rawIntent = nlu.intent;
+      fallbackUsed = true;
+    }
+  }
+  body.intent = rawIntent;
+
+  // Détermine le tier loaded (heuristique simple : si body.main + others, on est sur couche0)
+  var tierLoaded = 'minimal';
+  if (body.main && body.main.name) tierLoaded = 'couche0';
+  if (rawIntent && rawIntent.indexOf('draft') === 0) tierLoaded = 'couche0+couche1';
+
+  // Appel du handler core
+  var result = handleAskAgent_(body);
+
+  // Détermine tools_called et delegations à partir du résultat
+  var tools = [];
+  var delegations = [];
+  var intentReported = result.intent || rawIntent;
+  if (intentReported === 'draft_short' || intentReported === 'draft_any') {
+    tools.push('drafter_a'); delegations.push('drafter_a');
+  } else if (intentReported === 'draft_long') {
+    tools.push('drafter_b'); delegations.push('drafter_b');
+  } else if (intentReported === 'summarize') {
+    tools.push('regen_situation');
+  } else if (intentReported === 'task') {
+    tools.push('create_task');
+  } else if (intentReported === 'watch') {
+    tools.push('add_to_watch'); delegations.push('add_to_watch');
+  } else if (intentReported === 'podcast') {
+    tools.push('brief_podcast'); delegations.push('brief_podcast');
+  } else if (intentReported === 'legal') {
+    tools.push('signature_action'); delegations.push('signature_action');
+  } else {
+    tools.push('chat_libre');
+  }
+
+  // Persiste Agent session ID sur la Conv (cosmétique pour V1, utile pour le pipeline cron qui lit aussi ce champ)
+  try {
+    var convPageId = ensureConvPage_(body.conversation_id);
+    if (convPageId) {
+      UrlFetchApp.fetch('https://api.notion.com/v1/pages/' + convPageId, {
+        method: 'patch', contentType: 'application/json',
+        headers: { 'Authorization': 'Bearer ' + getSecret_('NOTION_API_TOKEN'), 'Notion-Version': NOTION_API_VERSION },
+        payload: JSON.stringify({ properties: {
+          'Agent session ID': { rich_text: [{ text: { content: sessionId } }] },
+          'Last agent': { rich_text: [{ text: { content: SIDEBAR_AGENT_ID + ' · ' + intentReported } }] },
+        } }),
+        muteHttpExceptions: true,
+      });
+    }
+  } catch (_e) { /* non-bloquant */ }
+
+  // Log sidebar_interactions
+  var payload = _buildInteractionPayload_(body, result, {
+    intent: intentReported,
+    tools: tools,
+    delegations: delegations,
+    session_id: sessionId,
+    tier_loaded: tierLoaded,
+    tokens_used: result.tokens_used || 0,
+  });
+  var interactionId = logSidebarInteraction_(payload);
+
+  // Enrichit la réponse avec session_id + interaction_id (pour update_outcome ultérieur)
+  result.session_id = sessionId;
+  if (interactionId) result.interaction_id = interactionId;
+  if (fallbackUsed) result.intent_via_nlu = true;
+  result.flags = { context_tier_budget_tokens: cfg.context_tier_budget_tokens };
+  return result;
+}
+
+/* ─── Logging hook utilitaire pour handleAskAgent_ ─────────────────
+   Construit un payload sidebar_interactions à partir du body de la requête
+   et du résultat du handler. */
+function _buildInteractionPayload_(body, result, opts) {
+  opts = opts || {};
+  var tools = opts.tools || [];
+  var delegations = opts.delegations || [];
+  var personId = '';
+  if (body.main && body.main.notion_page_id) personId = body.main.notion_page_id;
+  else if (body.person_id) personId = body.person_id;
+  return {
+    conv_id: body.conversation_id || '',
+    person_id: personId,
+    session_id: opts.session_id || body.session_id || '',
+    user_query: body.query || '',
+    intent: opts.intent || result.intent || 'unknown',
+    tools_called: tools,
+    delegations: delegations,
+    reply_excerpt: (result && result.reply ? String(result.reply).slice(0, 500) : ''),
+    outcome: result && result.error ? 'error' : 'pending',
+    proposed_actions: (result && result.proposed) || [],
+    tokens_used: opts.tokens_used || 0,
+    tier_loaded: opts.tier_loaded || 'minimal',
+    human_in_loop: true,
+  };
 }
