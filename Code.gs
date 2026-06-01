@@ -42,7 +42,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.10', agents: Object.keys(AGENTS) }; break;
+      case 'ping':                       result = { ok: true, version: '1.12', agents: Object.keys(AGENTS) }; break;
       case 'agent_invoke':               result = handleAgentInvoke_(body);           break;
       case 'agent_list':                 result = handleAgentList_();                 break;
       // v1.10 — Spec 2 V1 (agent sidebar + apprentissage observationnel)
@@ -99,7 +99,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.10' });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.12', agents: Object.keys(AGENTS) });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2276,6 +2276,18 @@ function handleAgentList_() {
     out[k] = { fn: a.fn, role: a.role, model: a.model, permissions: a.permissions || {}, notion_page: a.notion_page || null };
   });
   return { ok: true, agents: out, count: Object.keys(AGENTS).length };
+}
+
+/** Helper interne — invocation d'un agent du Registry depuis les handlers legacy.
+ *  Réutilisé par handleAskAgent_, handleRegenSituation_, handleBriefPodcast_,
+ *  handleLegalAnalysis_, handleGenerateNda_ pour éliminer la duplication IA. */
+function invokeAgent_(agentId, ctx, query, mode) {
+  return handleAgentInvoke_({
+    agent: agentId,
+    query: query || '(invocation interne)',
+    context: ctx || {},
+    mode: mode || 'fast'
+  });
 }
 
 function handleAgentInvoke_(body) {

@@ -1,9 +1,23 @@
-# POF Missive Sidebar
-
-Interface humaine légère sur l'écosystème POF, déployée comme sidebar dans Missive. Pas un nouveau système — un raccourci vers les pipelines existants (Missive Triage, Gestion documentaire, Morning Briefing).
 # Changelog — POF Missive Sidebar
 
 Versions notables. Date au format YYYY-MM-DD.
+
+## v1.12 — 2026-06-01
+
+**Bascule prod complète du POF Agent Registry**. Le proxy `missive-sidebar-proxy` est déployé en version 21 (GAS), code hash `25ec1c90`. 10 agents listés via `agent_list`.
+
+**3 nouveaux agents lawyer** ajoutés au registre :
+- `lawyer/legal-orchestrator` (Haiku, router JSON) — classifie un document/requête et dispatche vers l'expert approprié
+- `lawyer/nda-expert` (Sonnet, JSON) — analyse NDA adverse (modes `analyse` / `generation`), valide signature, génère NDA POF via template Odoo Sign
+- `lawyer/corporate-governance-expert` (Sonnet, JSON) — pactes associés, contrat de marque POF×PO, mode `ESCALATE_REQUIRED` systématique
+
+Registry total : 10 agents répartis en 4 fonctions (marketing-comms, business-deals, lawyer, ops-it).
+
+**Helper interne `invokeAgent_(agentId, ctx, query, mode)`** ajouté côté backend pour permettre aux handlers legacy (`handleAskAgent_`, `handleRegenSituation_`, `handleBriefPodcast_`, `handleLegalAnalysis_`, `handleGenerateNda_`) de déléguer au Registry sans dupliquer la logique Claude. Refactor des handlers reporté (zero frontend change).
+
+**Zéro breaking change frontend** — la sidebar continue d'appeler ses endpoints legacy. Le Registry est exposé en parallèle via `agent_invoke` + `agent_list` pour les autres surfaces (Cowork, Slack future).
+
+Endpoint `doGet` (ping public) renvoie maintenant version + agents.
 
 ## v1.10 — 2026-05-18
 

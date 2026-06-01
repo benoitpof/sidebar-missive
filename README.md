@@ -63,11 +63,11 @@ Toutes les valeurs lues au runtime via `getSecret_('<NAME>')` → Secrets_Proxy 
 
 Secrets Doppler utilisés au runtime : `ANTROPIC_API_TOKEN`, `NOTION_API_TOKEN`, `MISSIVE_API_TOKEN`, `SLACK_BOT_TOKEN`.
 
-## 32 endpoints API
+## 32 endpoints API + Agent Registry
 
 Voir [page hub Notion](https://www.notion.so/353c2ce245e88132bf51e041d7ce9e66) pour la liste complète et les payloads attendus, ou les `case '...':` du switch principal dans `Code.gs`.
 
-Catégories :
+Catégories endpoints legacy :
 - Lookup & cache Notion (5)
 - Écritures Notion (10)
 - Lecture cross-bases (4)
@@ -76,10 +76,23 @@ Catégories :
 - Veille / triage (3)
 - Feedback (2)
 
+**POF Agent Registry (v1.12, en prod)** — 2 endpoints API uniforme :
+- `agent_invoke` : `{action, token, agent: 'function/agent-id', query, context, mode}` → réponse `{ok, agent, model, reply, output, proposed_actions, side_effects, tokens_used}`
+- `agent_list` : retourne les 10 agents avec model + role + permissions
+
+10 agents répartis en 4 fonctions :
+- `marketing-comms/` : drafter-short, drafter-formal, podcast-briefer
+- `business-deals/` : situation-summarizer, deal-analyst
+- `lawyer/` : legal-orchestrator, legal-analyzer, nda-expert, corporate-governance-expert
+- `ops-it/` : workflow-architect
+
+Spec Registry : [POF Agent Registry](https://www.notion.so/371c2ce245e88143b9c3e30f0122958c)
+
 ## Specs liées
 
 - [Spec 1 — Workflow juridique sidebar](https://www.notion.so/363c2ce245e881c98f6bfc03b5cd7b06)
 - [Spec 2 — Agent sidebar mails](https://www.notion.so/363c2ce245e881379fcad37bc9aa5771)
+- [POF Agent Registry](https://www.notion.so/371c2ce245e88143b9c3e30f0122958c)
 - [Gestion documentaire](https://www.notion.so/352c2ce245e880d9ad49ea835e83afe0)
 - [Missive Triage — section sidebar §9](https://www.notion.so/340c2ce245e88128ad9fe868d4935d61)
 - [Morning Briefing — feedback loop sidebar](https://www.notion.so/332c2ce245e8817ebb8bd950556f4599)
