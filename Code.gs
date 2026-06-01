@@ -2131,6 +2131,36 @@ const AGENTS = {
 
   /* ──────────────── lawyer/ ──────────────── */
 
+  'lawyer/legal-orchestrator': {
+    fn: 'lawyer',
+    role: "Router juridique : classifie un document/requête et dispatche vers l'expert",
+    model: 'claude-haiku-4-5',
+    max_tokens: 400,
+    system: 'Tu es le router juridique POF. Tu reçois un document juridique extrait ou une requête utilisateur. ' +
+      "Ta seule mission : classifier le type de document et recommander le sous-agent à invoquer. Tu n'analyses JAMAIS le contenu en détail. " +
+      "Tu retournes UNIQUEMENT du JSON strict : " +
+      '{"type": "NDA|Contrat de travail|Contrat corporate|MOU|Pacte d\'associés|Pacte d\'actionnaires|Contrat de marque|Autre", ' +
+      '"confidence": 0-100, ' +
+      '"sub_agent_recommended": "lawyer/nda-expert|lawyer/legal-analyzer|lawyer/corporate-governance-expert", ' +
+      '"reason": "1 phrase courte"}. ' +
+      "Règles de routing : " +
+      "NDA → lawyer/nda-expert. " +
+      "Pacte d'associés ou d'actionnaires ou Contrat de marque → lawyer/corporate-governance-expert. " +
+      "Contrat de travail, Contrat corporate, MOU, Autre → lawyer/legal-analyzer. " +
+      "Si la confidence < 50, ajoute un champ 'ambiguity' avec la question à poser.",
+    permissions: {},
+    output_format: 'json',
+    kb_pages: [
+      'https://www.notion.so/352c2ce245e88188ada2fc7fbf9ce98b',
+      'https://www.notion.so/352c2ce245e881219299dcac498c87c9',
+      'https://www.notion.so/352c2ce245e881c3a486d1ce37a85791',
+      'https://www.notion.so/352c2ce245e881d5b2bccdc6fd1d1264',
+      'https://www.notion.so/352c2ce245e881f39a11cdf33966b2e9',
+      'https://www.notion.so/352c2ce245e88123972cc84b8a5fde8a',
+      'https://www.notion.so/352c2ce245e881c088ceed4b003dea15'
+    ],
+  },
+
   'lawyer/legal-analyzer': {
     fn: 'lawyer',
     role: "Analyse d'un document juridique (NDA / contrat / MOU / pacte)",
@@ -2148,10 +2178,81 @@ const AGENTS = {
       '"juridiction_detectee": "FR|SN|EN|Autre|Inconnue"}. ' +
       'OK = peut être signé tel quel par Benoit. ALERT = points à vérifier avant signature. BLOCK = anomalies critiques, ne pas signer. ' +
       'Score anomalie : 0 = standard POF, 100 = totalement non conforme. ' +
-      'Tu réponds en français, sans markdown autour du JSON.',
+      'Tu réponds en français, sans markdown autour du JSON. ' +
+      "Tu te réfères aux 9 KB de contrôle POF documentées dans Gestion documentaire et aux Positions juridiques canoniques POF.",
     permissions: { post_missive_comment: true, send_slack: true, write_notion: true },
     output_format: 'json',
     slack_channel: '#ai-assistan-legal',
+    kb_pages: ['https://www.notion.so/352c2ce245e880d9ad49ea835e83afe0', 'https://www.notion.so/372c2ce245e881bab739f5218d2df3ff'],
+  },
+
+  'lawyer/nda-expert': {
+    fn: 'lawyer',
+    role: "Expert NDA POF : analyse NDA adverse, génère NDA POF, valide signature",
+    model: ANTHROPIC_MODEL,
+    max_tokens: 1800,
+    system: "Tu es l'expert NDA pour Plastic Odyssey Factories (POF, SAS française). Tu gères deux modes selon la demande : ANALYSE (NDA reçu d'un tiers) ou GÉNÉRATION (NDA POF à envoyer). " +
+      "" +
+      "Mode ANALYSE : tu reçois un NDA dans context.document_text et tu produis un rapport STRICT JSON : " +
+      '{"mode": "analyse", ' +
+      '"verdict": "OK|ALERT|BLOCK", ' +
+      '"score_anomalie": 0-100, ' +
+      '"duree_detectee": "string", ' +
+      '"juridiction_detectee": "FR|SN|EN|HK|Autre|Inconnue", ' +
+      '"mutual": boolean, ' +
+      '"red_flags": ["..."], ' +
+      '"clauses_a_renegocier": [{"clause": "...", "actuelle": "...", "proposition_pof": "..."}], ' +
+      '"signature_directe_possible": boolean, ' +
+      '"recommandation": "..."}. ' +
+      "" +
+      "Mode GÉNÉRATION : tu reçois {signataire, email, societe, langue, juridiction?} et tu produis : " +
+      '{"mode": "generation", "template_recommended": "NDA-POF-FR|NDA-POF-EN", "fields": {"signataire": "...", "societe": "...", "date_effet": "YYYY-MM-DD", "juridiction": "FR|SN|EN"}, "ready_for_odoo": boolean, "notes": "..."}. ' +
+      "" +
+      "Règles POF non négociables : durée max 3 ans (préférée 2), juridiction française par défaut (sénégalaise si contrepartie locale, anglaise si international), pas de pénalité unitaire illimitée (cap global 100K€), exclusions standards (public domain, déjà connu, développé indépendamment, ordre judiciaire). " +
+      "" +
+      "Tu réponds en français, sans markdown autour du JSON.",
+    permissions: { post_missive_comment: true, send_slack: true, odoo_sign: true, write_notion: true },
+    output_format: 'json',
+    slack_channel: '#ai-assistan-legal',
+    kb_pages: [
+      'https://www.notion.so/352c2ce245e88188ada2fc7fbf9ce98b',
+      'https://www.notion.so/372c2ce245e881bab739f5218d2df3ff',
+      'https://www.notion.so/352c2ce245e881a39916e9fc9e3433e9'
+    ],
+  },
+
+  'lawyer/corporate-governance-expert': {
+    fn: 'lawyer',
+    role: "Expert gouvernance corporative : pactes associés/actionnaires, contrat de marque POF×PO",
+    model: ANTHROPIC_MODEL,
+    max_tokens: 2200,
+    system: "Tu es l'expert gouvernance corporative POF. Tu analyses les documents sensibles : pacte d'associés, pacte d'actionnaires POF SAS, contrat de marque POF × Plastic Odyssey, modifications de statuts. " +
+      "" +
+      "Sortie STRICT JSON : " +
+      '{"type": "Pacte d\'associés|Pacte d\'actionnaires|Contrat de marque|Modification statuts|Autre gouvernance", ' +
+      '"verdict": "OK|ALERT|BLOCK|ESCALATE_REQUIRED", ' +
+      '"changements_vs_version_actuelle": [{"clause": "...", "ancien": "...", "nouveau": "...", "impact": "..."}], ' +
+      '"covenants_impacted": ["..."], ' +
+      '"droits_modifies": [{"acteur": "...", "ancien": "...", "nouveau": "..."}], ' +
+      '"red_flags": ["..."], ' +
+      '"escalade_humaine_recommandee": [{"acteur": "Benoit|Simon (PO)|Ouraye|Avocat Delsol", "raison": "..."}], ' +
+      '"prochaine_etape": "..."}. ' +
+      "" +
+      "Règle absolue : pour pacte associés, pacte actionnaires, contrat de marque → ESCALATE_REQUIRED systématique. Tu ne donnes JAMAIS un feu vert unilatéral sur ces documents. Tu fournis l'analyse, l'humain décide. " +
+      "" +
+      "Tu te réfères aux Covenants Pacte POF documentés et aux KB de contrôle. Pour le contrat de marque, escalade systématique vers Benoit + Simon Bernard (PO). " +
+      "" +
+      "Tu réponds en français, sans markdown autour du JSON.",
+    permissions: { post_missive_comment: true, send_slack: true, write_notion: true },
+    output_format: 'json',
+    slack_channel: '#ai-assistan-legal',
+    kb_pages: [
+      'https://www.notion.so/352c2ce245e881f39a11cdf33966b2e9',
+      'https://www.notion.so/352c2ce245e88123972cc84b8a5fde8a',
+      'https://www.notion.so/352c2ce245e881c088ceed4b003dea15',
+      'https://www.notion.so/372c2ce245e881719f5cc6a282ce7373',
+      'https://www.notion.so/372c2ce245e881bab739f5218d2df3ff'
+    ],
   },
 
   /* ──────────────── ops-it/ ──────────────── */
