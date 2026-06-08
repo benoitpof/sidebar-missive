@@ -2,6 +2,16 @@
 
 Versions notables. Date au format YYYY-MM-DD.
 
+## v1.13 — 2026-06-08
+
+**Recherche Folk plus permissive + réconciliation manuelle.** Deux chantiers pour corriger les contacts qui existent dans Folk mais reviennent « Non trouvé ».
+
+**Migration `lookup_folk` vers l'API REST Folk** (backend). Remplace le combo Claude + MCP Zapier (match exact, mono-groupe, périmètre limité) par un appel direct `GET api.folk.app/v1/people` avec `filter[emails][like]` + `filter[fullName][like]` + `combinator=or` : match partiel, workspace entier, un seul appel. Token `FOLK_API_TOKEN` via Secrets_Proxy (jamais hardcodé). Ancien chemin conservé en fallback (`handleLookupFolkViaMcp_`) : tant que le token n'est pas dans Doppler, zéro régression. Contrat de retour inchangé + ajout `folk_url`.
+
+**Endpoint `reconcile_folk`** (backend + frontend). L'humain colle le lien Folk d'un contact dans la carte Contact (états « Non trouvé » et « Folk uniquement ») ; le backend crée/lie la fiche Notion et y stocke `Lien Folk` + `ID folk`. Débloque les contacts hors périmètre API en s'appuyant sur la session navigateur. Réutilise `handleCreatePerson_` + `handleAddFieldToNotion_` (champs déjà whitelistés).
+
+**Zéro breaking change frontend** sur les endpoints existants.
+
 ## v1.12 — 2026-06-01
 
 **Bascule prod complète du POF Agent Registry**. Le proxy `missive-sidebar-proxy` est déployé en version 21 (GAS), code hash `25ec1c90`. 10 agents listés via `agent_list`.

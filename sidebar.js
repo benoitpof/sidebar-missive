@@ -192,6 +192,17 @@ function notionHref(pageId) {
   return `https://notion.so/${(pageId || '').replace(/-/g, '')}`;
 }
 
+/* Parse un lien Folk → {folk_id, network_id, group_id, url}.
+   Tolère les deux formats : .../groups/{grp}/people/{id} et .../people/{id}.
+   Retourne null si pas de segment people/{id}. */
+function parseFolkUrl(url) {
+  const net  = String(url || '').match(/network\/([0-9a-f-]{36})/i);
+  const grp  = String(url || '').match(/groups\/([0-9a-f-]{36})/i);
+  const pers = String(url || '').match(/people\/([0-9a-f-]{36})/i);
+  if (!pers) return null;
+  return { folk_id: pers[1], network_id: net ? net[1] : null, group_id: grp ? grp[1] : null, url: String(url).trim() };
+}
+
 /* Unified "linked to Notion" pill — small grey badge with Notion logo + label.
    Use wherever an object opens its corresponding Notion page so sync state
    reads the same way across the whole sidebar. */
@@ -229,6 +240,7 @@ async function lookupInNotion(p) {
   return callProxy('lookup_person', { email: p.email, name: p.name });
 }
 const lookupInFolk                = p => callProxy('lookup_folk',   { email: p.email, name: p.name });
+const reconcileFolk               = args => callProxy('reconcile_folk', args);
 const lookupParticipantInNotion   = p => lookupInNotion(p);
 const createPersonInNotion        = p => callProxy('create_person', { email: p.email, name: p.name });
 const updatePersonInstructions    = (pageId, text) => callProxy('update_person_instructions', { page_id: pageId, text });
@@ -575,9 +587,11 @@ async function renderMain(person, notionData) {
             ${icon('external')} Chercher dans Folk
           </a>
         </div>
+        ${folkReconcileBlock()}
       </div>`;
     container.querySelector('[data-action="create-notion"]')
       .addEventListener('click', e => doCreateNotion(e, person));
+    setupFolkReconcile(person);
 
     // Folk silent background : upgrade UI si trouvé
     lookupInFolk(person).then(folkData => {
@@ -592,6 +606,8 @@ async function renderMain(person, notionData) {
             <svg class="badge-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>
           </a>`;
         if (actions) actions.remove();
+        const recBlock = document.getElementById('folk-reconcile');
+        if (recBlock) recBlock.remove();
       } else {
         badge.className = 'badge badge-folk';
         badge.innerHTML = `${icon('alert')} Folk uniquement`;
@@ -631,6 +647,79 @@ function savePersonInstructions(pageId) {
       toast(r?.error || 'Échec sauvegarde personne', 'error');
     }
   }).catch(() => toast('Erreur réseau', 'error'));
+}
+
+/* Bloc repliable "Lien Folk introuvable ?" — réconciliation manuelle.
+   Affiché sous les actions dans les états "Non trouvé" et "Folk uniquement". */
+function folkReconcileBlock() {
+  return `
+    <details id="folk-reconcile">
+      <summary class="field-label">${icon('external')} Lien Folk introuvable ?</summary>
+      <div class="form-field">
+        <input type="url" id="folk-reconcile-url" placeholder="Coller le lien Folk du contact…">
+        <div class="action-row">
+          <button class="btn btn-primary btn-block" data-action="reconcile-folk">
+            ${icon('check')} Réconcilier
+          </button>
+        </div>
+        <div class="field-error" id="folk-reconcile-error" hidden></div>
+      </div>
+    </details>`;
+}
+
+function setupFolkReconcile(person) {
+  const block = document.getElementById('folk-reconcile');
+  if (!block) return;
+  block.querySelector('[data-action="reconcile-folk"]')
+    .addEventListener('click', e => doReconcileFolk(e, person));
+}
+
+async function doReconcileFolk(ev, person) {
+  const btn   = ev.currentTarget;
+  const input = document.getElementById('folk-reconcile-url');
+  const err   = document.getElementById('folk-reconcile-error');
+  const showErr = msg => { if (err) { err.innerHTML = `${icon('alert')} ${esc(msg)}`; err.hidden = false; } };
+  if (err) err.hidden = true;
+
+  const parsed = parseFolkUrl(input ? input.value : '');
+  if (!parsed) {
+    if (input) input.classList.add('invalid');
+    showErr('Lien Folk invalide (segment people/{id} introuvable).');
+    return;
+  }
+  if (input) input.classList.remove('invalid');
+
+  btn.innerHTML = `<div class="spinner"></div> Réconciliation…`;
+  btn.disabled  = true;
+
+  const r = await reconcileFolk({
+    email:      person.email,
+    name:       person.name,
+    folk_id:    parsed.folk_id,
+    folk_url:   parsed.url,
+    network_id: parsed.network_id,
+    group_id:   parsed.group_id,
+  });
+
+  if (r?.ok) {
+    const badge = document.getElementById('main-badge');
+    const actions = document.getElementById('fallback-actions');
+    if (badge) {
+      badge.outerHTML = `
+        <a href="${esc(notionHref(r.notion_page_id))}" target="_blank" class="badge badge-found" title="Ouvrir dans Notion">
+          ${icon('check')} Folk + Notion
+          <svg class="badge-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>
+        </a>`;
+    }
+    if (actions) actions.remove();
+    const block = document.getElementById('folk-reconcile');
+    if (block) block.remove();
+    invalidateIndex();
+  } else {
+    btn.innerHTML = `${icon('check')} Réconcilier`;
+    btn.disabled  = false;
+    showErr(r?.error || 'Échec de la réconciliation.');
+  }
 }
 
 async function doCreateNotion(ev, person) {

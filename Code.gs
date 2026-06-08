@@ -16,6 +16,7 @@
  *   lookup_conv                  {missive_conversation_id}
  *   upsert_conv                  {missive_conversation_id, text, page_id?}
  *   lookup_folk                  {email, name}
+ *   reconcile_folk               {email, name, folk_id, folk_url, network_id?, group_id?, page_id?}
  *   setup_config                 {config} — one-shot, locked after first call
  */
 
@@ -23,6 +24,8 @@ const NOTION_API_VERSION = '2022-06-28';
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const ANTHROPIC_MAX_TOKENS = 800;
 const MCP_FOLK = 'https://mcp.zapier.com/api/mcp/a/13565407/mcp';
+const FOLK_API_BASE = 'https://api.folk.app/v1';
+const FOLK_NETWORK_ID = '66210930-178c-4c34-8322-8936ec19186a';
 
 /* ═══════════════════════════════════════════════════════════════
    ENTRY POINTS
@@ -42,7 +45,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.12', agents: Object.keys(AGENTS) }; break;
+      case 'ping':                       result = { ok: true, version: '1.13', agents: Object.keys(AGENTS) }; break;
       case 'agent_invoke':               result = handleAgentInvoke_(body);           break;
       case 'agent_list':                 result = handleAgentList_();                 break;
       // v1.10 — Spec 2 V1 (agent sidebar + apprentissage observationnel)
@@ -70,6 +73,7 @@ function doPost(e) {
       case 'estimate_opportunity':       result = handleQueueAgentTask_(body, 'estimate_opportunity'); break;
       case 'send_nda':                   result = handleQueueAgentTask_(body, 'send_nda');             break;
       case 'lookup_folk':                result = handleLookupFolk_(body);            break;
+      case 'reconcile_folk':             result = handleReconcileFolk_(body);         break;
       // v1.8 — nouveaux endpoints sidebar v4
       case 'analyze_content':            result = handleAnalyzeContent_(body);        break;
       case 'brief_attachment':           result = handleBriefAttachment_(body);       break;
@@ -99,7 +103,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.12', agents: Object.keys(AGENTS) });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.13', agents: Object.keys(AGENTS) });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1421,6 +1425,37 @@ function handleCreatePerson_(body) {
   };
 }
 
+/* ─── Reconcile folk : réconciliation manuelle par lien Folk ───
+   L'humain colle le lien Folk d'un contact que l'API ne voit pas.
+   On crée/lie la fiche Notion et on y stocke l'ID + le lien Folk.
+   Args : {email, name, folk_id, folk_url, network_id?, group_id?, page_id?} */
+function handleReconcileFolk_(body) {
+  var folkId  = String(body.folk_id || '');
+  var folkUrl = String(body.folk_url || '');
+  if (!folkId)  return { ok: false, error: 'folk_id required' };
+  if (!folkUrl) return { ok: false, error: 'folk_url required' };
+
+  try {
+    // 1) Fiche Notion : réutilise create_person si pas de page_id fourni
+    var pageId = String(body.page_id || '');
+    if (!pageId) {
+      var created = handleCreatePerson_({ email: body.email, name: body.name });
+      if (!created.success) return { ok: false, error: 'create_person failed' };
+      pageId = created.notion_page_id;
+    }
+
+    // 2) Écrit les champs Folk via le helper de PATCH whitelisté (add_field_to_notion)
+    var link = handleAddFieldToNotion_({ page_id: pageId, field: 'Lien Folk', value: folkUrl });
+    if (!link.success) return { ok: false, error: link.error || 'Lien Folk update failed' };
+    var ident = handleAddFieldToNotion_({ page_id: pageId, field: 'ID folk', value: folkId });
+    if (!ident.success) return { ok: false, error: ident.error || 'ID folk update failed' };
+
+    return { ok: true, notion_page_id: pageId, folk_url: folkUrl, folk_id: folkId };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+}
+
 /* ─── Update person instructions ─────────────────────────────── */
 
 function handleUpdatePersonInstr_(body) {
@@ -1574,10 +1609,83 @@ function handleListConvTasks_(body) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   FOLK via Anthropic + MCP Zapier
+   FOLK — API REST directe + fallback MCP
+   Token : FOLK_API_TOKEN (Doppler), lu via getSecret_().
+   Tant que le token n'est pas provisionné, bascule sur l'ancien
+   chemin Claude + MCP Zapier (handleLookupFolkViaMcp_).
    ═══════════════════════════════════════════════════════════════ */
 
 function handleLookupFolk_(body) {
+  var email = String(body.email || '');
+  var name  = String(body.name || '');
+
+  // Token Folk via Secrets_Proxy. Absent/erreur → fallback MCP Zapier.
+  var token;
+  try {
+    token = getSecret_('FOLK_API_TOKEN');
+  } catch (e) {
+    return handleLookupFolkViaMcp_(body);
+  }
+  if (!token) return handleLookupFolkViaMcp_(body);
+
+  // Recherche workspace-wide en une requête : email OU nom, match partiel (like).
+  var qs = [];
+  if (email) qs.push('filter[emails][like]='   + encodeURIComponent(email));
+  if (name)  qs.push('filter[fullName][like]=' + encodeURIComponent(name));
+  qs.push('combinator=or');
+
+  var res = UrlFetchApp.fetch(FOLK_API_BASE + '/people?' + qs.join('&'), {
+    method: 'get',
+    headers: { 'Authorization': 'Bearer ' + token },
+    muteHttpExceptions: true
+  });
+  var code = res.getResponseCode();
+  var text = res.getContentText();
+  if (code < 200 || code >= 300) {
+    throw new Error('Folk API ' + code + ': ' + text.slice(0, 400));
+  }
+
+  var parsed = text ? JSON.parse(text) : {};
+  // Forme réponse à valider : on tolère { data: [...] }, { items: [...] } ou un tableau brut.
+  var list = parsed.data || parsed.items || parsed.results || (Array.isArray(parsed) ? parsed : []);
+  if (!list || !list.length) {
+    return { found: false, folk_id: null, notion_page_id: null,
+             name: name || null, email: email || null, folk_url: null };
+  }
+
+  var person  = list[0];
+  var folkId  = person.id || null;
+  var folkUrl = folkId
+    ? 'https://app.folk.app/apps/contacts/network/' + FOLK_NETWORK_ID + '/people/' + folkId
+    : null;
+
+  // Nom / email renvoyés par Folk (forme exacte à valider), avec repli sur l'entrée.
+  var folkName  = person.fullName || name || null;
+  var folkEmail = email || null;
+  if (!email && person.emails && person.emails.length) {
+    folkEmail = (typeof person.emails[0] === 'string') ? person.emails[0]
+              : (person.emails[0].email || person.emails[0].value || null);
+  }
+
+  // Croisement Notion par email : réutilise le lookup People existant. Pas de duplication.
+  var notionPageId = null;
+  if (folkEmail) {
+    var notion = handleLookupPerson_({ email: folkEmail });
+    if (notion && notion.found) notionPageId = notion.notion_page_id;
+  }
+
+  return {
+    found: true,
+    folk_id: folkId,
+    notion_page_id: notionPageId,
+    name: folkName,
+    email: folkEmail,
+    folk_url: folkUrl
+  };
+}
+
+/** Ancien chemin Folk : Claude + MCP Zapier. Conservé en fallback tant que FOLK_API_TOKEN n'est pas provisionné. */
+function handleLookupFolkViaMcp_(body) {
   var email = String(body.email || '');
   var name  = String(body.name || '');
   var prompt =
