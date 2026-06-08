@@ -1646,17 +1646,25 @@ function handleLookupFolk_(body) {
   }
 
   var parsed = text ? JSON.parse(text) : {};
-  // Forme réponse à valider : on tolère { data: [...] }, { items: [...] } ou un tableau brut.
-  var list = parsed.data || parsed.items || parsed.results || (Array.isArray(parsed) ? parsed : []);
+  // Forme réponse Folk confirmée : { data: { items: [...], pagination: {} } }.
+  // Replis défensifs sur d'autres formes au cas où l'API évolue.
+  var list = (parsed.data && parsed.data.items) ? parsed.data.items
+           : (Array.isArray(parsed.data) ? parsed.data
+           : (parsed.items || parsed.results || (Array.isArray(parsed) ? parsed : [])));
   if (!list || !list.length) {
     return { found: false, folk_id: null, notion_page_id: null,
              name: name || null, email: email || null, folk_url: null };
   }
 
-  var person  = list[0];
-  var folkId  = person.id || null;
-  var folkUrl = folkId
-    ? 'https://app.folk.app/apps/contacts/network/' + FOLK_NETWORK_ID + '/people/' + folkId
+  var person = list[0];
+  // Les ids Folk sont préfixés (per_, grp_) ; l'URL web utilise l'UUID brut.
+  var rawId = String(person.id || '').replace(/^per_/, '');
+  var grp   = (person.groups && person.groups.length)
+    ? String(person.groups[0].id || '').replace(/^grp_/, '') : '';
+  var folkId  = rawId || null;
+  var folkUrl = rawId
+    ? 'https://app.folk.app/apps/contacts/network/' + FOLK_NETWORK_ID +
+      (grp ? '/groups/' + grp : '') + '/people/' + rawId
     : null;
 
   // Nom / email renvoyés par Folk (forme exacte à valider), avec repli sur l'entrée.
