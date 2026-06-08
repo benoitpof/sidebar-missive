@@ -473,6 +473,17 @@ Source unique : **Tabler Icons outline**, inlinées avec `stroke="currentColor"`
 
 Toutes les requêtes : `POST <PROXY_URL>`, body JSON `{action, token, …args}`, header `Content-Type: text/plain;charset=utf-8`.
 
+### POF Agent Registry (v1.12 — en prod)
+
+API uniforme par fonction métier. Spec complète : [POF Agent Registry](https://www.notion.so/371c2ce245e88143b9c3e30f0122958c).
+
+| Action | Args | Réponse |
+|---|---|---|
+| `agent_list` | `{}` | `{ok, count, agents: {...}}` — 10 agents avec model/role/permissions |
+| `agent_invoke` | `{agent: 'function/agent-id', query, context, mode}` | `{ok, agent, model, reply, output, proposed_actions, side_effects, tokens_used, duration_ms}` |
+
+10 agents (4 fonctions) : `marketing-comms/{drafter-short, drafter-formal, podcast-briefer}`, `business-deals/{situation-summarizer, deal-analyst}`, `lawyer/{legal-orchestrator, legal-analyzer, nda-expert, corporate-governance-expert}`, `ops-it/{workflow-architect}`.
+
 ### Lookup / écriture personnes
 | Action | Args | Réponse |
 |---|---|---|
