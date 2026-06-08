@@ -1610,7 +1610,7 @@ function handleListConvTasks_(body) {
 
 /* ═══════════════════════════════════════════════════════════════
    FOLK — API REST directe + fallback MCP
-   Token : FOLK_API_TOKEN (Doppler), lu via getSecret_().
+   Token : FOLK_API_KEY (Doppler), lu via getSecret_().
    Tant que le token n'est pas provisionné, bascule sur l'ancien
    chemin Claude + MCP Zapier (handleLookupFolkViaMcp_).
    ═══════════════════════════════════════════════════════════════ */
@@ -1622,7 +1622,7 @@ function handleLookupFolk_(body) {
   // Token Folk via Secrets_Proxy. Absent/erreur → fallback MCP Zapier.
   var token;
   try {
-    token = getSecret_('FOLK_API_TOKEN');
+    token = getSecret_('FOLK_API_KEY');
   } catch (e) {
     return handleLookupFolkViaMcp_(body);
   }
@@ -1684,7 +1684,7 @@ function handleLookupFolk_(body) {
   };
 }
 
-/** Ancien chemin Folk : Claude + MCP Zapier. Conservé en fallback tant que FOLK_API_TOKEN n'est pas provisionné. */
+/** Ancien chemin Folk : Claude + MCP Zapier. Conservé en fallback tant que FOLK_API_KEY n'est pas provisionné. */
 function handleLookupFolkViaMcp_(body) {
   var email = String(body.email || '');
   var name  = String(body.name || '');

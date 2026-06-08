@@ -104,7 +104,7 @@ Aucun nouveau secret. Livrable indépendant, déployable seul.
 ### 3.1 Capacités API (vérifiées sur developer.folk.app)
 
 - **Base** : `https://api.folk.app/v1`
-- **Auth** : header `Authorization: Bearer <FOLK_API_TOKEN>`
+- **Auth** : header `Authorization: Bearer <FOLK_API_KEY>`
 - **Recherche people** : endpoint `/v1/people` avec filtres natifs.
   Syntaxe confirmée : `filter[emails][like]={email}&filter[fullName][like]={name}&combinator=or`
 - **Opérateurs** : `eq`, `not_eq`, `like`, `not_like`, `empty`, `not_empty`.
@@ -114,7 +114,7 @@ Aucun nouveau secret. Livrable indépendant, déployable seul.
 
 ### 3.2 Pré-requis ops (bloquants)
 
-- [ ] **Token API Folk** provisionné dans Doppler (ex. `FOLK_API_TOKEN`), lu via `getSecret_()`
+- [ ] **Token API Folk** provisionné dans Doppler (ex. `FOLK_API_KEY`), lu via `getSecret_()`
       (pattern Secrets_Proxy POF, jamais hardcodé).
 - [ ] **Vérifier le scope du token** : confirmer qu'une clé API Folk voit bien TOUS les groupes
       (ou couvrir explicitement le groupe de Rebecca). Si la clé est elle aussi group-scoped,
@@ -127,7 +127,7 @@ Remplacer l'appel `callClaude_(..., [MCP_FOLK])` par un `UrlFetchApp.fetch` dire
 ```js
 function handleLookupFolk_(body) {
   var email = String(body.email || ''), name = String(body.name || '');
-  var token = getSecret_('FOLK_API_TOKEN');
+  var token = getSecret_('FOLK_API_KEY');
   var qs = [];
   if (email) qs.push('filter[emails][like]='   + encodeURIComponent(email));
   if (name)  qs.push('filter[fullName][like]=' + encodeURIComponent(name));
