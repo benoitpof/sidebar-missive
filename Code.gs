@@ -45,7 +45,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.14', agents: Object.keys(AGENTS) }; break;
+      case 'ping':                       result = { ok: true, version: '1.16.1', agents: Object.keys(AGENTS) }; break;
       case 'agent_invoke':               result = handleAgentInvoke_(body);           break;
       case 'agent_list':                 result = handleAgentList_();                 break;
       // v1.10 — Spec 2 V1 (agent sidebar + apprentissage observationnel)
@@ -103,7 +103,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.14', agents: Object.keys(AGENTS) });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.16.1', agents: Object.keys(AGENTS) });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -124,6 +124,12 @@ function handleAnalyzeContent_(body) {
   var convId = String(body.conversation_id || '');
   if (!convId) return { summary: '', attachments: [], sources: [] };
 
+  // PJ : indépendantes du résumé IA. On les récupère d'abord via Missive API
+  // pour qu'elles s'affichent même si l'analyse IA est court-circuitée ou échoue.
+  // (v1.15 — avant, le backend renvoyait toujours attachments: [], la sidebar
+  //  affichait "Aucune pièce jointe" même sur un mail avec PJ.)
+  var attachments = collectConvAttachments_(convId);
+
   var subject = String(body.subject || '');
   var mainName = (body.main && body.main.name) || '';
   var mainEmail = (body.main && body.main.email) || '';
@@ -133,14 +139,14 @@ function handleAnalyzeContent_(body) {
   // Garde-fou taille : on borne le transcript envoyé à l'IA (12k chars côté front, on re-coupe ici)
   if (convText.length > 14000) convText = convText.slice(0, 14000);
 
-  // Pas d'info → réponse vide rapide, pas d'appel IA
+  // Pas d'info → réponse rapide (PJ quand même), pas d'appel IA
   if (!convText && !subject && !personInstr && !convInstr) {
-    return { summary: '', attachments: [], sources: [] };
+    return { summary: '', attachments: attachments, sources: [] };
   }
 
   var apiKey;
   try { apiKey = getSecret_('ANTROPIC_API_TOKEN'); }
-  catch (_e) { return { summary: '', attachments: [], sources: [], error: 'no_anthropic_key' }; }
+  catch (_e) { return { summary: '', attachments: attachments, sources: [], error: 'no_anthropic_key' }; }
 
   var system = 'Tu es un assistant qui résume une conversation Missive pour Benoit (CEO POF). ' +
     'Réponds UNIQUEMENT en JSON valide, sans markdown : ' +
@@ -164,16 +170,85 @@ function handleAnalyzeContent_(body) {
     }), muteHttpExceptions: true
   });
   if (res.getResponseCode() !== 200) {
-    return { summary: '', attachments: [], sources: [], error: 'anthropic_' + res.getResponseCode() };
+    return { summary: '', attachments: attachments, sources: [], error: 'anthropic_' + res.getResponseCode() };
   }
   var data = JSON.parse(res.getContentText());
   var textBlock = (data.content || []).filter(function (b) { return b.type === 'text'; })[0];
   var parsed = parseJsonLoose_(textBlock ? textBlock.text : '');
   return {
     summary: (parsed && parsed.summary) || '',
-    attachments: [], // pas de Missive API ici
+    attachments: attachments,
     sources: (parsed && Array.isArray(parsed.sources)) ? parsed.sources : []
   };
+}
+
+/* ─── Pièces jointes d'une conversation (Missive API) ──────────
+ * Normalise les PJ de tous les messages d'une conversation vers la forme
+ * attendue par le frontend (renderAttachments) : { id, name, type, size, url }.
+ * - type : extension minuscule (pdf, docx, xlsx…) pour le badge.
+ * - size : chaîne lisible ("3.13 MB") ; le frontend la reparse (sizeBytes).
+ * Best-effort : déduplique par id et retourne [] si l'API Missive échoue. */
+function collectConvAttachments_(convId) {
+  if (!convId) return [];
+  var out = [];
+  var seen = {};
+  try {
+    // Missive plafonne ce endpoint à limit=10 (au-delà : HTTP 400 "max 'limit' value is 10").
+    var msgs = (missiveListMessages_(convId, 10).messages) || [];
+    msgs.forEach(function (m) {
+      (m.attachments || []).forEach(function (a) {
+        if (isInlineImage_(a)) return;        // images embarquées (signature, logo) : exclues
+        var name = a.filename || a.name || '(sans nom)';
+        var key = name + '|' + (a.size || '');
+        if (seen[key]) return;                // même fichier re-cité dans des réponses du thread
+        seen[key] = true;
+        out.push({
+          id:   a.id || '',
+          name: name,
+          type: attachmentExt_(a, name),
+          size: humanFileSize_(a.size),
+          url:  a.url || a.download_url || ''
+        });
+      });
+    });
+    Logger.log('collectConvAttachments_ : ' + out.length + ' PJ (hors inline) pour conv ' + convId);
+  } catch (e) {
+    Logger.log('collectConvAttachments_ échec (' + convId + ') : ' + e.message);
+    return [];
+  }
+  return out;
+}
+
+/* Image inline embarquée (signature, logo) : media_type "image" + nom auto-généré
+ * type image001.png / image002.jpg (Outlook/Exchange/Apple Mail). On l'exclut de la
+ * liste des PJ — c'est ce que fait Missive dans son propre affichage. L'API REST
+ * n'expose pas de flag inline ni de content-id, ce pattern est le signal fiable. */
+function isInlineImage_(a) {
+  var mt = String(a.media_type || '').toLowerCase();
+  var fn = String(a.filename || a.name || '');
+  return mt === 'image' && /^image\d+\.[a-z0-9]+$/i.test(fn);
+}
+
+/* Extension minuscule pour le badge frontend. Préfère a.extension,
+ * sinon dérive depuis le nom de fichier. */
+function attachmentExt_(a, name) {
+  var ext = String(a.extension || '').toLowerCase().replace(/^\./, '');
+  if (!ext && name) {
+    var m = String(name).match(/\.([a-z0-9]+)\s*$/i);
+    if (m) ext = m[1].toLowerCase();
+  }
+  return ext;
+}
+
+/* Octets → chaîne lisible ("3.13 MB"). Tolère number ou string. */
+function humanFileSize_(bytes) {
+  var n = Number(bytes);
+  if (!n || n < 0 || isNaN(n)) return '';
+  if (n < 1024) return n + ' B';
+  var units = ['KB', 'MB', 'GB', 'TB'];
+  var i = -1;
+  do { n = n / 1024; i++; } while (n >= 1024 && i < units.length - 1);
+  return (n >= 10 ? n.toFixed(0) : n.toFixed(2)) + ' ' + units[i];
 }
 
 /* ─── brief_attachment (stub : besoin Missive API) ─────────── */
@@ -702,50 +777,145 @@ function resolveContactPageId_(body) {
   return null;
 }
 
-/* ─── brief_podcast : appel direct webhook (avec génération IA) ── */
+/* HTML → texte brut (les corps de messages Missive sont en HTML). */
+function htmlToText_(s) {
+  if (!s) return '';
+  var t = String(s);
+  t = t.replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ');
+  t = t.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|tr|li|h[1-6])>/gi, '\n');
+  t = t.replace(/<[^>]+>/g, ' ');
+  t = t.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<')
+       .replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;/gi, "'");
+  t = t.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  return t;
+}
 
+/* ─── brief_podcast : synthèse de ce qui est coché (résumé + fil + PJ lues + sources) ──
+ * Unifié pour les deux déclencheurs frontend (gros bouton + footer PODCAST).
+ * - include_summary / summary_text : le résumé édité, si coché.
+ * - attachment_ids : PJ sélectionnées (absent => toutes les PJ non-inline).
+ * - sources : sources identifiées par analyze_content.
+ * Les PDF sélectionnés sont téléchargés et envoyés à Claude en blocs document (base64,
+ * lecture native, pas de header beta). Forme validée contre l'API réelle. */
 function handleBriefPodcast_(body) {
   var convId = String(body.conversation_id || '');
   if (!convId) return { success: false, error: 'conversation_id required' };
 
-  // Construit le contexte à partir de ce que le frontend passe
   var subject = String(body.subject || '');
   var mainName = (body.main && body.main.name) || '';
   var mainEmail = (body.main && body.main.email) || '';
   var othersList = (body.others || []).map(function (p) { return p.name || p.email; }).join(', ');
   var personInstr = String(body.person_instructions || '');
   var convInstr   = String(body.conv_instructions || '');
+  var includeSummary = body.include_summary !== false; // défaut true
+  var summaryText = String(body.summary_text || '');
+  var selectedIds = Array.isArray(body.attachment_ids) ? body.attachment_ids : null; // null => toutes
+  var sources = Array.isArray(body.sources) ? body.sources : [];
+
+  // 1. Fil Missive (texte + PJ) en un seul appel — limit 10 (cap API).
+  var convText = '';
+  var docBlocks = [];     // PDF lus → blocs document Claude
+  var pjRead = [];        // noms des PJ lues
+  var pjSkipped = [];     // PJ non lues (trop lourdes, non-PDF, échec)
+  var pdfBudgetBytes = 18 * 1024 * 1024; // garde-fou cumulatif
+  var spentBytes = 0;
+  var maxPdfs = 5;
+  try {
+    var msgs = (missiveListMessages_(convId, 10).messages) || [];
+    var ordered = msgs.slice().reverse(); // missiveListMessages_ renvoie le plus récent d'abord
+    var parts = [];
+    var seenAtt = {};
+    ordered.forEach(function (m) {
+      var who = (m.from_field && (m.from_field.name || m.from_field.address)) || '';
+      var txt = htmlToText_(m.body || m.preview || '');
+      if (txt) parts.push((who ? who + ' :\n' : '') + txt);
+      (m.attachments || []).forEach(function (a) {
+        if (isInlineImage_(a)) return;
+        var id = a.id || '';
+        var name = a.filename || a.name || '(sans nom)';
+        var key = name + '|' + (a.size || '');
+        if (seenAtt[key]) return; seenAtt[key] = true;
+        if (selectedIds && id && selectedIds.indexOf(id) === -1) return; // non sélectionnée
+        var ext = attachmentExt_(a, name);
+        if (ext !== 'pdf' || !a.url) { pjSkipped.push(name + (ext ? ' (.' + ext + ', non lu)' : ' (non lu)')); return; }
+        var szNum = Number(a.size) || 0;
+        if (szNum > 12 * 1024 * 1024) { pjSkipped.push(name + ' (PDF trop volumineux, ' + humanFileSize_(szNum) + ')'); return; }
+        if (pjRead.length >= maxPdfs || (spentBytes + szNum) > pdfBudgetBytes) {
+          pjSkipped.push(name + ' (budget PJ atteint)'); return;
+        }
+        try {
+          var pdf = UrlFetchApp.fetch(a.url, { muteHttpExceptions: true });
+          if (pdf.getResponseCode() === 200) {
+            var bytes = pdf.getBlob().getBytes();
+            spentBytes += bytes.length;
+            docBlocks.push({
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: Utilities.base64Encode(bytes) },
+              title: name
+            });
+            pjRead.push(name);
+          } else {
+            pjSkipped.push(name + ' (téléchargement ' + pdf.getResponseCode() + ')');
+          }
+        } catch (e2) {
+          pjSkipped.push(name + ' (téléchargement échoué)');
+        }
+      });
+    });
+    convText = parts.join('\n\n---\n\n');
+    if (convText.length > 12000) convText = convText.slice(0, 12000) + '…';
+    Logger.log('brief_podcast : ' + pjRead.length + ' PDF lus, ' + pjSkipped.length + ' PJ ignorées, conv ' + convId);
+  } catch (e) {
+    Logger.log('brief_podcast : fil Missive indisponible (' + convId + ') : ' + e.message);
+  }
 
   var apiKey = getSecret_('ANTROPIC_API_TOKEN');
 
-  var system = 'Tu es un assistant exécutif POF qui rédige des briefings audio. Voix : Impact Realist - assertif, pragmatique, technique sans jargon, sans filler. Pas d em-dashes. Démarre direct sur l enjeu, sans préambule. Adresse Benoit en "tu". Chiffres en toutes lettres. 400 à 600 mots. Format briefing exécutif.';
+  // Prompt aligné sur la skill /podcast-generator (même fonctionnement) + lecture PJ/sources.
+  var system = 'Tu rédiges le briefing audio d un assistant exécutif affûté pour Benoit (CEO POF). ' +
+    'Ce n est PAS un podcast journalistique : c est un briefing qui FILTRE, pas qui résume. ' +
+    'Voix : tu connais Benoit, POF, ses priorités, son vocabulaire. Tu l adresses en "tu". Phrases courtes, déclaratives, une idée par phrase. Comme un CFO briefe un board. Pas d em-dashes. ' +
+    'INTERDIT (zéro tolérance) : "Bienvenue", "Dans ce briefing", "Commençons", "Pour résumer", "En conclusion", "Passons à", "Il est important de noter", les questions rhétoriques, les clôtures ("Voilà pour aujourd hui", "Bonne journée"), le hedging ("il semblerait", "on pourrait penser"), le méta ("ce qu il faut retenir", "le point clé ici"). ' +
+    'GARDER, dans cet ordre : 1) décisions prises ou à prendre (qui décide quoi, pour quand) 2) chiffres qui changent quelque chose 3) risques et blocages 4) engagements pris 5) info qui contredit une hypothèse. ' +
+    'TUER : le contexte déjà connu, les descriptions de process, les caveats inutiles, les répétitions, tout ce qui est "intéressant" mais pas actionnable. ' +
+    'Structure : accroche (1 phrase, l essentiel, aucun échauffement) ; corps par sujet décroissant en impact (fait précis avec nom/chiffre/date, puis implication, puis action) ; bottom line (1 phrase, celle qui compte si Benoit décroche). ' +
+    'Format audio : pas de listes à puces (inaudibles), séquence à l oral ("Premier point.", "Deuxième chose."). Chiffres et montants EN TOUTES LETTRES ("douze millions d euros", jamais "12M€"). Max 1000 mots. ' +
+    'IMPORTANT : la pièce jointe (souvent un PDF) est généralement l élément le plus important. Lis-la, analyse-la, restitue ses points clés : montants, dates, échéances, engagements, risques. ' +
+    'Intègre les sources quand elles sont présentes. Sans instruction spécifique, déduis du sujet et du contenu ce qui compte vraiment. N invente jamais de chiffres ou de dates.';
 
-  var prompt = 'Génère un briefing audio sur cette conversation Missive pour que Benoit comprenne où ça en est sur son trajet vélo.\n\n' +
-    'Contact principal : ' + mainName + ' (' + mainEmail + ')\n' +
-    (subject ? 'Sujet : ' + subject + '\n' : '') +
-    (othersList ? 'Autres participants : ' + othersList + '\n' : '') +
-    (personInstr ? '\nInstructions personne (Notion) :\n' + personInstr + '\n' : '') +
-    (convInstr ? '\nInstructions conversation (Notion) :\n' + convInstr + '\n' : '') +
-    '\nConversation Missive ID : ' + convId + '\n' +
-    '\nSi tu n as pas le contenu exact des derniers échanges, contextualise à partir des instructions Notion ci-dessus et indique clairement à Benoit quels points lui restent à confirmer. Évite d inventer des chiffres ou des dates non fournis.';
+  var p = [];
+  p.push('Génère un briefing audio sur cette conversation Missive pour que Benoit comprenne où ça en est, sur son trajet vélo.');
+  p.push('Contact principal : ' + mainName + (mainEmail ? ' (' + mainEmail + ')' : ''));
+  if (subject) p.push('Sujet : ' + subject);
+  if (othersList) p.push('Autres participants : ' + othersList);
+  if (personInstr) p.push('\nInstructions Notion (personne) :\n' + personInstr);
+  if (convInstr) p.push('\nInstructions Notion (conversation) :\n' + convInstr);
+  if (includeSummary && summaryText) p.push('\nRésumé déjà rédigé (intègre-le et affine-le) :\n' + summaryText);
+  if (convText) p.push('\n--- Fil de la conversation ---\n' + convText + '\n--- fin du fil ---');
+  if (sources.length) p.push('\nSources identifiées :\n' + sources.map(function (s) {
+    return '  - ' + (s.label || s.url || s.type || '') + (s.url ? ' (' + s.url + ')' : '');
+  }).join('\n'));
+  if (pjRead.length) p.push('\nPièces jointes fournies ci-dessous, à LIRE et résumer : ' + pjRead.join(', '));
+  if (pjSkipped.length) p.push('\nPièces jointes non lues (mentionne-les seulement si pertinent) : ' + pjSkipped.join(', '));
+  if (!includeSummary && !summaryText) p.push('\n(Aucun résumé pré-rédigé : construis la synthèse depuis le fil et les pièces jointes.)');
+
+  var userContent = [{ type: 'text', text: p.join('\n') }];
+  for (var i = 0; i < docBlocks.length; i++) userContent.push(docBlocks[i]);
 
   var claudeRes = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
     method: 'post',
     contentType: 'application/json',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
     payload: JSON.stringify({
       model: ANTHROPIC_MODEL,
-      max_tokens: 1500,
+      max_tokens: 2000,
       system: system,
-      messages: [{ role: 'user', content: prompt }]
+      messages: [{ role: 'user', content: userContent }]
     }),
     muteHttpExceptions: true
   });
   if (claudeRes.getResponseCode() !== 200) {
-    return { success: false, error: 'Anthropic ' + claudeRes.getResponseCode() };
+    return { success: false, error: 'Anthropic ' + claudeRes.getResponseCode() + ': ' + claudeRes.getContentText().slice(0, 200) };
   }
   var data = JSON.parse(claudeRes.getContentText());
   var textBlock = (data.content || []).filter(function (b) { return b.type === 'text'; })[0];
@@ -763,7 +933,7 @@ function handleBriefPodcast_(body) {
     return { success: false, error: 'webhook ' + hookRes.getResponseCode(), preview: text.slice(0, 200) };
   }
 
-  return { success: true, preview: text.slice(0, 300) };
+  return { success: true, preview: text.slice(0, 300), pdfs_read: pjRead.length, pj_skipped: pjSkipped.length };
 }
 
 /* ─── add_to_watch : append à "Briefing veille" du contact ─── */

@@ -1310,24 +1310,10 @@ function setupTaskActions() {
   const podcastBtn = document.getElementById('fa-podcast');
   if (podcastBtn) podcastBtn.addEventListener('click', () => {
     if (!S.conversationId) { toast('Aucune conversation', 'error'); return; }
-    // Context-aware: brief the visible pane (Contenu → mail, Actions → situation, otherwise → conv)
-    const activePane = document.querySelector('.pane.active')?.id || '';
-    let scope = 'conversation';
-    let scopeLabel = 'de la conversation';
-    if (activePane === 'pane-task')     { scope = 'content';   scopeLabel = 'du mail'; }
-    else if (activePane === 'pane-timeline') { scope = 'situation'; scopeLabel = 'de la synthèse'; }
+    // Même comportement que le gros bouton : synthèse de ce qui est coché (tout par défaut).
     markFooterDone(podcastBtn);
-    toast(`Briefing podcast ${scopeLabel} envoyé`);
-    callProxy('brief_podcast', {
-      conversation_id: S.conversationId,
-      scope,
-      subject: S.convSubject || '',
-      main:    S.main,
-      others:  S.others,
-      person_instructions: S.mainNotion?.person_instructions || '',
-      conv_instructions:   S.convOrigText || '',
-      situation: TimelineState.situation,
-    }).then(r => {
+    toast('Briefing podcast envoyé');
+    launchPodcastBrief().then(r => {
       if (!r?.success) { podcastBtn.classList.remove('done'); toast(r?.error || 'Erreur briefing', 'error'); }
     }).catch(() => { podcastBtn.classList.remove('done'); toast('Erreur réseau', 'error'); });
   });
@@ -2941,27 +2927,8 @@ function renderAttachments() {
     if (v3) updatePodcastLaunchSub();
     return;
   }
-  // Initialize selection state once: only the heaviest attachment is checked by default
-  if (v3 && items.length && !items.some(a => typeof a._pod !== 'undefined')) {
-    const sizeBytes = (s) => {
-      if (!s) return 0;
-      const m = String(s).trim().match(/([\d.,]+)\s*([kmgt]?)b?/i);
-      if (!m) return 0;
-      const n = parseFloat(m[1].replace(',', '.'));
-      const unit = m[2].toLowerCase();
-      const mult = unit === 't' ? 1e12 : unit === 'g' ? 1e9 : unit === 'm' ? 1e6 : unit === 'k' ? 1e3 : 1;
-      return n * mult;
-    };
-    let heaviestIdx = 0;
-    let maxSize = -1;
-    items.forEach((a, i) => {
-      const sz = sizeBytes(a.size);
-      if (sz > maxSize) { maxSize = sz; heaviestIdx = i; }
-    });
-    items.forEach((a, i) => { a._pod = (i === heaviestIdx); });
-  } else {
-    items.forEach(a => { if (typeof a._pod === 'undefined') a._pod = !v3; });
-  }
+  // Sélection par défaut : tout est coché (résumé + toutes les PJ).
+  items.forEach(a => { if (typeof a._pod === 'undefined') a._pod = true; });
 
   list.innerHTML = items.map(a => {
     const badge = fileTypeBadge(a.type);
@@ -3324,6 +3291,32 @@ function updatePodcastLaunchSub() {
   if (btn) btn.disabled = parts.length === 0;
 }
 
+/* Déclencheur unique du briefing podcast — partagé par le gros bouton et le
+ * footer PODCAST. Synthétise ce qui est coché : résumé (si inclus) + PJ
+ * sélectionnées (toutes par défaut) + sources. Le backend lit le fil et les PDF. */
+function launchPodcastBrief() {
+  if (!S.conversationId) { toast('Aucune conversation', 'error'); return Promise.resolve({ success: false }); }
+  const incl = document.getElementById('pod-incl-summary');
+  const summaryIncluded = incl ? !!incl.checked : true;
+  const summaryText = document.getElementById('summary-edit-text')?.value || ContentState.summary || '';
+  const atts = ContentState.attachments || [];
+  const payload = {
+    conversation_id:     S.conversationId,
+    include_summary:     summaryIncluded,
+    summary_text:        summaryText,
+    sources:             ContentState.sources || [],
+    subject:             S.convSubject || '',
+    main:                S.main,
+    others:              S.others,
+    person_instructions: S.mainNotion?.person_instructions || '',
+    conv_instructions:   S.convOrigText || '',
+  };
+  // PJ chargées → envoie la sélection (tout coché par défaut). Sinon, omettre
+  // laisse le backend lire toutes les PJ non-inline de la conversation.
+  if (atts.length) payload.attachment_ids = atts.filter(a => a._pod !== false).map(a => a.id);
+  return callProxy('brief_podcast', payload);
+}
+
 function setupPodcastLauncher() {
   const incl = document.getElementById('pod-incl-summary');
   const btn  = document.getElementById('podcast-launch-btn');
@@ -3347,15 +3340,7 @@ function setupPodcastLauncher() {
     if (subEl)   subEl.textContent   = 'Tu recevras le rendu dans Notion.';
     if (arrowEl) arrowEl.innerHTML   = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M5 12l5 5l10 -10"/></svg>`;
     toast('Briefing podcast en cours');
-    callProxy('brief_podcast', {
-      conversation_id: S.conversationId,
-      include_summary: summaryIncluded,
-      summary_text: summaryText,
-      attachment_ids: selectedPJ.map(a => a.id),
-      subject: S.convSubject || '',
-      main: S.main,
-      others: S.others,
-    }).catch(() => toast('Erreur réseau', 'error'));
+    launchPodcastBrief().catch(() => toast('Erreur réseau', 'error'));
     setTimeout(() => {
       btn.classList.remove('done');
       btn.disabled = false;

@@ -2,6 +2,34 @@
 
 Versions notables. Date au format YYYY-MM-DD.
 
+## v1.16.1 — 2026-06-10
+
+**Génération du briefing alignée sur la skill `/podcast-generator`.** Le transport était déjà identique à la skill (POST `{Texte_a_lire}` sur le hook `…/uwyi8u9/` — le code ne touche jamais ElevenLabs ; la mention « ElevenLabs » du hub Notion est périmée). Reste l'alignement de la génération : le prompt système de `handleBriefPodcast_` reprend les directives de la skill (briefing qui filtre et non résume, voix CFO, patterns interdits zéro-tolérance, hiérarchie GARDER/TUER, structure accroche/corps/bottom-line, format audio sans listes, chiffres en toutes lettres, max 1000 mots) en conservant la lecture/analyse des PDF et l'intégration des sources de v1.16. `max_tokens` 1500 → 2000. Webhook et payload inchangés.
+
+## v1.16 — 2026-06-10
+
+**Le briefing podcast lit et résume vraiment les pièces jointes.** Les deux déclencheurs (gros bouton « Lancer le briefing podcast » et footer PODCAST) avaient des comportements divergents et le backend ignorait l'essentiel de ce que le frontend envoyait : `summary_text`, `attachment_ids`, `scope`, `situation` n'étaient jamais lus, et le PDF (souvent la pièce la plus importante) n'était jamais analysé.
+
+**Backend** (`Code.gs`). `handleBriefPodcast_` refait. Récupère le fil Missive (`missiveListMessages_`, limit 10), télécharge les PDF sélectionnés et les envoie à Claude en blocs `document` base64 — lecture native PDF par `claude-sonnet-4-6`, aucun header beta. Synthétise : résumé édité (si coché) + fil de la conversation + PDF lus + sources. Sans instruction Notion, déduit l'important du sujet et du contenu. Filtre les images inline, dédup par nom + taille. Garde-fous : PDF > 12 Mo ignoré, budget cumulatif 18 Mo, max 5 PDF — les skips sont signalés dans le prompt (pas de troncature silencieuse). Nouveau helper `htmlToText_`. Forme du bloc document validée contre l'API réelle (download Missive → base64 → lecture Claude).
+
+**Frontend** (`sidebar.js`). Les deux boutons appellent une fonction unique `launchPodcastBrief()` : même payload, même comportement. Sélection par défaut = **tout coché** (résumé + toutes les PJ), au lieu de la seule PJ la plus lourde. Payload enrichi : `sources`, `person_instructions`, `conv_instructions`. Le footer PODCAST perd sa logique de scope (cosmétique, ignorée par le backend).
+
+**Validé** end-to-end sur une vraie conversation avec PDF : le briefing restitue le fil + montants / échéances / demande extraits du PDF, voix Impact Realist.
+
+## v1.15.1 — 2026-06-10
+
+**Les pièces jointes sont enfin détectées.** L'onglet Conv. affichait « PIÈCES JOINTES (0) — Aucune pièce jointe » même sur un mail portant un PDF de plusieurs Mo. Cause : `handleAnalyzeContent_` renvoyait `attachments: []` en dur (`// pas de Missive API ici`, TODO laissé en v1.14). Le frontend lit `r.attachments` : tableau toujours vide → bloc toujours vide, et compteur du launcher podcast faux.
+
+**Backend** (`Code.gs`). `handleAnalyzeContent_` récupère désormais les PJ via le helper `collectConvAttachments_(convId)` (Missive API `missiveListMessages_`, déjà utilisé par le flow juridique). Le tableau est renvoyé dans **toutes** les sorties de la fonction, y compris les chemins d'erreur IA et le court-circuit « pas d'info » : les PJ s'affichent même si le résumé échoue. Normalisation vers la forme attendue par le frontend `{id, name, type, size, url}` via `attachmentExt_()` (extension minuscule pour le badge) et `humanFileSize_()` (octets → « 3.13 MB »). Déduplication par nom + taille (robuste aux fichiers re-cités dans les réponses d'un thread). Best-effort : `[]` si l'API Missive échoue.
+
+Deux points validés contre l'API réelle (`GET /conversations/:id/messages`) :
+- **Cap `limit` = 10.** Au-delà, Missive renvoie `HTTP 400 "max 'limit' value is 10"`. Le premier jet v1.15 (V25) appelait avec `limit=20` → 400 → exception attrapée → `[]` en permanence. Corrigé en `limit=10`.
+- **Filtrage des images inline.** Les signatures/logos embarqués (`media_type: image` + nom auto-généré type `image001.png`) sont exclus via `isInlineImage_()`, comme le fait Missive dans son propre affichage. L'API REST n'expose ni flag `inline` ni content-id ; le pattern de nom est le signal fiable. Seules les vraies PJ (PDF, docx, images nommées…) restent listées.
+
+Forme attachment confirmée : `{id, filename, extension, media_type, sub_type, size (octets), url, width, height}`.
+
+**Zéro breaking change** : aucun champ renommé, contrat `{summary, attachments, sources}` inchangé, aucune modification frontend.
+
 ## v1.14 — 2026-06-10
 
 **Le résumé de la conversation se remplit tout seul.** L'onglet Conv. affichait un champ « Résumé de la conversation » vide en permanence : le frontend appelait `analyze_content` en ne passant que `conversation_id`, et le backend court-circuitait l'appel IA quand sujet + instructions étaient absents. Résultat : placeholder permanent, jamais de résumé.
