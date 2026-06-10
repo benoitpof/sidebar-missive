@@ -2,6 +2,16 @@
 
 Versions notables. Date au format YYYY-MM-DD.
 
+## v1.16.4 — 2026-06-10
+
+**L'onglet Actions ne reste plus vide.** La synthèse exécutive et la timeline n'étaient jamais câblées bout-en-bout : `handleListTimeline_` renvoyait `situation: null` en dur (les champs `Situation *` de la base Conversations, écrits par `regen_situation`, n'étaient relus nulle part), le frontend n'envoyait jamais `contact_page_id` (le backend bailait donc immédiatement, Notes + MOUs toujours vides), aucun bouton ne permettait de générer la première synthèse, le bouton regen jetait son résultat sans re-render, et les formes backend/renderer divergeaient.
+
+**Backend** (`Code.gs`). Nouveaux helpers `readConvSituation_(convId)` (relit la synthèse persistée par query sur Agent session ID, sans créer la page) et `buildSituationObject_()` (forme normalisée headline + bullets[{value}] + risks[{severity,icon,text}]). `handleListTimeline_` relit la synthèse via `conversation_id` et charge Notes/MOUs via `contact_page_id` — les deux args sont indépendants. `regen_situation` reçoit désormais `conv_text` (le résumé est construit sur le fil réel, plus seulement le sujet) et renvoie un objet `situation` normalisé. `ask_agent` intent summarize forwarde aussi `situation`.
+
+**Frontend** (`sidebar.js`). `loadTimeline` scindé en `loadSituation` (relit + auto-génère si absente, décision : auto-gen à l'ouverture) et `loadTimelineInteractions` (Notes/MOUs après résolution du contact). `autoGenSituation(convId, force)` passe le texte du fil (`fetchConvText`), persiste et rend ; garde-fou anti-doublon par conv. État vide enrichi : indicateur « Génération… » + bouton « Générer la synthèse » en fallback. Bouton regen recâblé sur `autoGenSituation(force)`. `TimelineState` reset au changement de conversation.
+
+**Schéma Notion.** Ajout de la propriété texte `Situation summary` sur la base Conversations (le headline n'était pas persisté).
+
 ## v1.16.3 — 2026-06-10
 
 **Filtrage des images décoratives (signatures, logos, icônes).** Le filtre ne capturait que le pattern Outlook `image001.png` — les logos, icônes réseaux sociaux (facebook, youtube…) et bandeaux nommés autrement passaient encore. `isInlineImage_` → `isDecorativeImage_(a, bodyHtml)`, qui combine trois signaux : (a) référence inline dans le corps du message (cid embarqué), (b) noms décoratifs / réseaux sociaux, (c) seuils taille/dimensions (< 50 Ko, < 400 px de côté, bandeau d'aspect > 4:1). Les PDF et docs passent toujours ; une image n'est gardée que si elle a une vraie valeur (photo, scan, capture). Validé sur conversations réelles (Ali Hilass, AZERTY) : icônes de signature filtrées, PDF conservés. S'applique au bloc PIÈCES JOINTES et au briefing podcast.

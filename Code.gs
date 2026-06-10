@@ -45,7 +45,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.16.3', agents: Object.keys(AGENTS) }; break;
+      case 'ping':                       result = { ok: true, version: '1.16.4', agents: Object.keys(AGENTS) }; break;
       case 'agent_invoke':               result = handleAgentInvoke_(body);           break;
       case 'agent_list':                 result = handleAgentList_();                 break;
       // v1.10 — Spec 2 V1 (agent sidebar + apprentissage observationnel)
@@ -104,7 +104,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.16.3', agents: Object.keys(AGENTS) });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.16.4', agents: Object.keys(AGENTS) });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -299,17 +299,70 @@ function handleFollowSource_(body) {
   });
 }
 
-/* ─── list_timeline : Notes + MOUs liés au contact ─────────── */
+/* ─── Construit l'objet situation normalisé attendu par le frontend ──────────
+ * (renderSituationNote/renderStatusBody : headline + bullets[{value}] + risks[{severity,icon,text}]).
+ * Retourne null si rien à afficher. */
+function buildSituationObject_(summary, bulletsArr, risksArr, updatedAt, source) {
+  var bullets = (bulletsArr || []).filter(function (b) { return b; }).map(function (b) {
+    return { value: String(b) };
+  });
+  var risks = (risksArr || []).filter(function (r) { return r; }).map(function (r) {
+    return { severity: 'high', icon: 'alertCircle', text: String(r) };
+  });
+  if (!summary && !bullets.length && !risks.length) return null;
+  return {
+    headline: summary || '',
+    bullets: bullets,
+    risks: risks,
+    updated: updatedAt || '',
+    source: source || 'ia'
+  };
+}
+
+/* ─── Relit la synthèse exécutive persistée sur la page Conversation ─────────
+ * Query par Agent session ID (NE crée PAS la page, contrairement à ensureConvPage_).
+ * Reconstruit bullets/risks depuis les blobs texte (préfixes • et ⚠ strippés). */
+function readConvSituation_(convId) {
+  var dbId = cfg_('NOTION_CONVS_DB');
+  var idProp = cfg_('CONV_MISSIVE_ID_PROP') || 'Agent session ID';
+  if (!dbId || !convId) return null;
+  var search = notionFetch_('POST', '/databases/' + dbId + '/query', {
+    filter: { property: idProp, rich_text: { equals: convId } }, page_size: 1
+  });
+  if (!search.results || !search.results.length) return null;
+  var props = search.results[0].properties || {};
+  var summary     = richTextValue_((props[CONV_SITUATION_SUMMARY_PROP] && props[CONV_SITUATION_SUMMARY_PROP].rich_text) || []);
+  var bulletsText = richTextValue_((props[CONV_SITUATION_BULLETS_PROP]  && props[CONV_SITUATION_BULLETS_PROP].rich_text)  || []);
+  var risksText   = richTextValue_((props[CONV_SITUATION_RISKS_PROP]    && props[CONV_SITUATION_RISKS_PROP].rich_text)    || []);
+  var updated     = (props[CONV_SITUATION_UPDATED_PROP] && props[CONV_SITUATION_UPDATED_PROP].date && props[CONV_SITUATION_UPDATED_PROP].date.start) || '';
+  var source      = (props[CONV_SITUATION_SOURCE_PROP]  && props[CONV_SITUATION_SOURCE_PROP].select && props[CONV_SITUATION_SOURCE_PROP].select.name) || 'ia';
+  var bullets = bulletsText ? bulletsText.split('\n').map(function (l) { return l.replace(/^[••\-\s]+/, '').trim(); }).filter(Boolean) : [];
+  var risks   = risksText   ? risksText.split('\n').map(function (l) { return l.replace(/^[⚠\s]+/, '').trim(); }).filter(Boolean) : [];
+  return buildSituationObject_(summary, bullets, risks, updated, source);
+}
+
+/* ─── list_timeline : synthèse persistée + Notes/MOUs liés au contact ─────────
+ * conversation_id → relit la synthèse exécutive ; contact_page_id → Notes + MOUs.
+ * Les deux args sont indépendants : l'un sans l'autre fonctionne. */
 function handleListTimeline_(body) {
   var contactPageId = String(body.contact_page_id || '');
-  if (!contactPageId) return { situation: null, upcoming: [], interactions: [] };
+  var convId        = String(body.conversation_id || '');
+
+  // 1. Synthèse exécutive persistée (relue depuis la page Conversation)
+  var situation = null;
+  if (convId) {
+    try { situation = readConvSituation_(convId); } catch (_e) {}
+  }
+
+  // 2. Notes + MOUs liés au contact (nécessite contact_page_id)
+  if (!contactPageId) return { situation: situation, upcoming: [], interactions: [] };
 
   var interactions = [];
 
   // Fetch la page contact pour récupérer les relations Notes + MOUs
   var page;
   try { page = notionFetch_('GET', '/pages/' + contactPageId, null); }
-  catch (e) { return { situation: null, upcoming: [], interactions: [], error: String(e) }; }
+  catch (e) { return { situation: situation, upcoming: [], interactions: [], error: String(e) }; }
   var props = page.properties || {};
 
   // 1. Notes liées (relation "Notes")
@@ -365,8 +418,8 @@ function handleListTimeline_(body) {
   interactions.sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
 
   return {
-    situation: null,  // alimenté par update_situation
-    upcoming: [],     // v2 : à wirer plus tard
+    situation: situation,  // relue depuis la page Conversation (champs Situation *)
+    upcoming: [],          // v2 : à wirer plus tard
     interactions: interactions
   };
 }
@@ -2003,6 +2056,7 @@ function slackPost_(channel, text, blocks) {
 /* --- Constantes V1.10 (Spec 2 — Agent sidebar + apprentissage observationnel) --- */
 const SIDEBAR_CONFIG_PAGE_ID       = '364c2ce245e88197b7efcb9e9d7bafa7'; // Sidebar Agent Config (JSON dans content)
 const SIDEBAR_INTERACTIONS_DS_ID   = '258d4583-2d78-4068-bf80-59183230f29c'; // DB Sidebar Interactions
+const CONV_SITUATION_SUMMARY_PROP  = 'Situation summary';
 const CONV_SITUATION_BULLETS_PROP  = 'Situation bullets';
 const CONV_SITUATION_RISKS_PROP    = 'Situation risks';
 const CONV_SITUATION_UPDATED_PROP  = 'Situation updated';
@@ -2065,7 +2119,8 @@ function buildAgentContext_(body) {
     others_names: others.map(function (p) { return p.name || p.email; }).join(', '),
     subject: subject,
     person_instructions: personInstr,
-    conv_instructions: convInstr
+    conv_instructions: convInstr,
+    conv_text: String(body.conv_text || '')
   };
 }
 
@@ -2172,11 +2227,12 @@ function handleAskAgent_(body) {
 
     // Cas 2 — Résumé / situation
     if (intent === 'summarize') {
-      var sit = handleRegenSituation_({ conversation_id: convId, main: body.main, others: body.others, subject: body.subject, person_instructions: body.person_instructions, conv_instructions: body.conv_instructions, return_only: true });
+      var sit = handleRegenSituation_({ conversation_id: convId, main: body.main, others: body.others, subject: body.subject, conv_text: body.conv_text, person_instructions: body.person_instructions, conv_instructions: body.conv_instructions, return_only: true });
       return {
         reply: sit.summary || 'Synthèse indisponible.',
         bullets: sit.bullets || [],
         risks: sit.risks || [],
+        situation: sit.situation || null,
         intent: 'summarize'
       };
     }
@@ -2270,6 +2326,7 @@ function handleRegenSituation_(body) {
     (ctx.others_names ? 'Autres participants : ' + ctx.others_names + '\n' : '') +
     (ctx.person_instructions ? '\nInstructions personne (Notion) :\n' + ctx.person_instructions + '\n' : '') +
     (ctx.conv_instructions ? '\nInstructions conversation (Notion) :\n' + ctx.conv_instructions + '\n' : '') +
+    (ctx.conv_text ? '\nFil de la conversation (transcript Missive) :\n"""\n' + ctx.conv_text + '\n"""\n' : '') +
     '\nDate du jour : ' + new Date().toISOString().slice(0, 10);
 
   var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
@@ -2289,23 +2346,25 @@ function handleRegenSituation_(body) {
   var parsed = parseJsonLoose_(textBlock ? textBlock.text : '');
   if (!parsed || typeof parsed !== 'object') return { error: 'invalid_json' };
 
+  var sourceVal = body.source_hint === 'humain' ? 'humain' :
+                  (body.source_hint === 'mixte' ? 'mixte' : 'ia');
   var out = {
     summary: parsed.summary || '',
     bullets: Array.isArray(parsed.bullets) ? parsed.bullets.slice(0, 7) : [],
     risks:   Array.isArray(parsed.risks)   ? parsed.risks.slice(0, 3)   : [],
     updated_at: new Date().toISOString()
   };
+  // Objet normalisé prêt à rendre par le frontend (headline + bullets/risks structurés)
+  out.situation = buildSituationObject_(out.summary, out.bullets, out.risks, out.updated_at, sourceVal);
 
   // Si return_only, ne persiste pas (utilisé en délégation ask_agent)
   if (body.return_only) return out;
 
-  // Persistance V1.10 : écriture sur les 4 champs dédiés Situation (Spec 2 §10)
+  // Persistance V1.10 : écriture sur les champs dédiés Situation (Spec 2 §10)
   try {
     var convPageId = ensureConvPage_(convId);
     var bulletsText = out.bullets.map(function (b) { return '• ' + b; }).join('\n');
     var risksText   = out.risks.map(function (r) { return '⚠ ' + r; }).join('\n');
-    var sourceVal   = body.source_hint === 'humain' ? 'humain' :
-                      (body.source_hint === 'mixte' ? 'mixte' : 'ia');
     updateConvSituationFields_(convPageId, {
       summary: out.summary,
       bullets: bulletsText,
@@ -2857,10 +2916,12 @@ function _validTier_(s) {
  * fields : {summary, bullets (str), risks (str), updated_at (ISO), source ('ia'|'humain'|'mixte')}
  */
 function updateConvSituationFields_(pageId, fields) {
+  var summary = String(fields.summary || '').slice(0, 1900);
   var bullets = String(fields.bullets || '').slice(0, 1900);
   var risks   = String(fields.risks || '').slice(0, 1900);
   var dateVal = String(fields.updated_at || new Date().toISOString());
   var props = {};
+  props[CONV_SITUATION_SUMMARY_PROP] = { rich_text: [{ text: { content: summary } }] };
   props[CONV_SITUATION_BULLETS_PROP] = { rich_text: [{ text: { content: bullets } }] };
   props[CONV_SITUATION_RISKS_PROP]   = { rich_text: [{ text: { content: risks } }] };
   props[CONV_SITUATION_UPDATED_PROP] = { date: { start: dateVal } };

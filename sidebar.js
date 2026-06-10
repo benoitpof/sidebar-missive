@@ -876,6 +876,12 @@ async function handleConversation(id, conversation) {
   S.convSuggested  = false;
   S.mainNotion     = null;
   TaskState._userExpanded = false;
+  // Reset de l'onglet Actions (sinon la synthèse/timeline de la conv précédente persiste)
+  TimelineState.situation    = null;
+  TimelineState.upcoming     = [];
+  TimelineState.interactions = [];
+  TimelineState.generating   = false;
+  TimelineState._genFor      = null;
   const _ta = document.getElementById('conv-textarea');
   _ta.value = '';
   _ta.classList.remove('is-suggested');
@@ -897,7 +903,8 @@ async function handleConversation(id, conversation) {
   renderOthers(S.others, id);
   loadConvInstructions(id);
   loadTasks(id);
-  loadTimeline(id);
+  loadSituation(id);   // synthèse exécutive (relue + auto-gen si absente)
+  renderTimeline();    // état vide immédiat ; les interactions arrivent après le lookup contact
   loadContent(id);
 
   // Pré-remplit le formulaire de tâche (respecte les champs dirty)
@@ -909,6 +916,8 @@ async function handleConversation(id, conversation) {
   if (id !== S.conversationId) return;
   S.mainNotion = notionData;
   renderMain(S.main, notionData);
+  // Notes + MOUs liés au contact : nécessite le contact résolu (contact_page_id)
+  loadTimelineInteractions(id, notionData?.notion_page_id || null);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -2075,15 +2084,69 @@ const TL_UPCOMING_TYPE_ICON = {
   task:    'taskBox',
 };
 
-async function loadTimeline(convId) {
+/* Synthèse exécutive : relit la version persistée (Conv Notion). Indépendant du
+   contact. Si absente, auto-génère (décision Benoit : auto-gen à l'ouverture). */
+async function loadSituation(convId) {
   const r = await callProxy('list_timeline', { conversation_id: convId });
   if (convId !== S.conversationId) return;
-  TimelineState.situation    = r?.situation || null;
-  TimelineState.upcoming     = Array.isArray(r?.upcoming) ? r.upcoming : [];
+  TimelineState.situation = r?.situation || null;
+  TimelineState.upcoming  = Array.isArray(r?.upcoming) ? r.upcoming : [];
+  renderSituationNote();
+  if (!TimelineState.situation) autoGenSituation(convId);
+}
+
+/* Interactions de la timeline (Notes + MOUs). Nécessite le contact résolu.
+   N'envoie PAS conversation_id : la synthèse est gérée par loadSituation, on
+   évite ainsi une relecture concurrente qui écraserait une auto-gen en cours. */
+async function loadTimelineInteractions(convId, contactPageId) {
+  if (!contactPageId) { renderTimeline(); return; }
+  const r = await callProxy('list_timeline', { contact_page_id: contactPageId });
+  if (convId !== S.conversationId) return;
   TimelineState.interactions = Array.isArray(r?.interactions) ? r.interactions : [];
   TimelineState.interactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-  renderSituationNote();
+  if (Array.isArray(r?.upcoming) && r.upcoming.length) TimelineState.upcoming = r.upcoming;
   renderTimeline();
+}
+
+/* Mappe la sortie brute regen/ask_agent ({summary, bullets:[str], risks:[str]})
+   vers la forme attendue par renderSituationNote. Fallback : le backend renvoie
+   déjà r.situation normalisé, ce mapper ne sert qu'en filet de sécurité. */
+function mapRawSituation(r) {
+  if (!r) return null;
+  const bullets = (r.bullets || []).filter(Boolean).map(b => ({ value: String(b) }));
+  const risks   = (r.risks   || []).filter(Boolean).map(t => ({ severity: 'high', icon: 'alertCircle', text: String(t) }));
+  if (!r.summary && !bullets.length && !risks.length) return null;
+  return { headline: r.summary || '', bullets, risks, updated: r.updated_at || '', source: 'ia' };
+}
+
+/* Génère (ou régénère) la synthèse exécutive via le backend, en lui passant le
+   texte réel du fil. Persiste côté Notion et rend le résultat. `force` relance
+   même si une génération a déjà eu lieu pour cette conv dans la session. */
+async function autoGenSituation(convId, force) {
+  if (!convId) return;
+  if (!force && TimelineState._genFor === convId) return;  // évite les doublons
+  TimelineState._genFor = convId;
+  TimelineState.generating = true;
+  renderSituationNote();
+
+  let convText = '';
+  try { convText = await fetchConvText(S.conversation); } catch (_e) {}
+  if (convId !== S.conversationId) return;
+
+  const r = await callProxy('regen_situation', {
+    conversation_id:     convId,
+    main:                S.main ? { name: S.main.name, email: S.main.email } : null,
+    others:              S.others || [],
+    subject:             S.convSubject || '',
+    conv_text:           convText,
+    person_instructions: S.mainNotion?.person_instructions || '',
+    conv_instructions:   S.convOrigText || '',
+    source_hint:         'ia',
+  });
+  if (convId !== S.conversationId) return;
+  TimelineState.generating = false;
+  TimelineState.situation = r?.situation || mapRawSituation(r);
+  renderSituationNote();
 }
 
 /* Public hook : when tasks/proposed change in the Task tab, re-render the
@@ -2098,11 +2161,22 @@ function renderSituationNote() {
   if (!root) return;
   const s = TimelineState.situation;
   if (!s) {
+    if (TimelineState.generating) {
+      root.innerHTML = `
+        <div class="waiting" style="padding:20px 8px">
+          ${icon('wand')}
+          <div class="msg">Génération de la synthèse…</div>
+        </div>`;
+      return;
+    }
     root.innerHTML = `
       <div class="waiting" style="padding:20px 8px">
         ${icon('inbox')}
         <div class="msg">Pas de synthèse disponible pour cette conversation</div>
+        <button class="btn" id="pn-generate" style="margin-top:10px">${icon('wand')}<span>Générer la synthèse</span></button>
       </div>`;
+    const gen = document.getElementById('pn-generate');
+    if (gen) gen.addEventListener('click', () => autoGenSituation(S.conversationId, true));
     return;
   }
   const stamp = formatRelStamp(s.updated);
@@ -2405,7 +2479,8 @@ function wireSituationActions() {
     regen.classList.add('spinning');
     toast('Synthèse en cours de régénération…');
     setTimeout(() => regen.classList.remove('spinning'), 800);
-    callProxy('regen_situation', { conversation_id: S.conversationId }).catch(() => {});
+    // force=true : régénère même si une synthèse existe déjà, puis re-render.
+    autoGenSituation(S.conversationId, true);
   });
 
   // ASK button — focuses the agent dock chat input
