@@ -2,6 +2,10 @@
 
 Versions notables. Date au format YYYY-MM-DD.
 
+## v1.16.3 — 2026-06-10
+
+**Filtrage des images décoratives (signatures, logos, icônes).** Le filtre ne capturait que le pattern Outlook `image001.png` — les logos, icônes réseaux sociaux (facebook, youtube…) et bandeaux nommés autrement passaient encore. `isInlineImage_` → `isDecorativeImage_(a, bodyHtml)`, qui combine trois signaux : (a) référence inline dans le corps du message (cid embarqué), (b) noms décoratifs / réseaux sociaux, (c) seuils taille/dimensions (< 50 Ko, < 400 px de côté, bandeau d'aspect > 4:1). Les PDF et docs passent toujours ; une image n'est gardée que si elle a une vraie valeur (photo, scan, capture). Validé sur conversations réelles (Ali Hilass, AZERTY) : icônes de signature filtrées, PDF conservés. S'applique au bloc PIÈCES JOINTES et au briefing podcast.
+
 ## v1.16.2 — 2026-06-10
 
 **Les pièces jointes s'affichent avant le résumé.** Elles étaient bundlées dans la réponse de `analyze_content` (qui attend Claude) → elles n'apparaissaient qu'une fois le résumé généré. Nouvel endpoint backend `list_attachments` (PJ seules via `collectConvAttachments_`, pas d'IA, ~0.5s). Frontend `loadContent` appelle `list_attachments` en premier et rend les PJ immédiatement, puis `analyze_content` pour le résumé + sources en parallèle (fallback PJ conservé si l'appel rapide échoue). Aucun changement de payload ni de webhook.

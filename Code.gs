@@ -45,7 +45,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.16.2', agents: Object.keys(AGENTS) }; break;
+      case 'ping':                       result = { ok: true, version: '1.16.3', agents: Object.keys(AGENTS) }; break;
       case 'agent_invoke':               result = handleAgentInvoke_(body);           break;
       case 'agent_list':                 result = handleAgentList_();                 break;
       // v1.10 — Spec 2 V1 (agent sidebar + apprentissage observationnel)
@@ -104,7 +104,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.16.2', agents: Object.keys(AGENTS) });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.16.3', agents: Object.keys(AGENTS) });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -206,7 +206,7 @@ function collectConvAttachments_(convId) {
     var msgs = (missiveListMessages_(convId, 10).messages) || [];
     msgs.forEach(function (m) {
       (m.attachments || []).forEach(function (a) {
-        if (isInlineImage_(a)) return;        // images embarquées (signature, logo) : exclues
+        if (isDecorativeImage_(a, m.body)) return;        // images embarquées (signature, logo) : exclues
         var name = a.filename || a.name || '(sans nom)';
         var key = name + '|' + (a.size || '');
         if (seen[key]) return;                // même fichier re-cité dans des réponses du thread
@@ -228,14 +228,32 @@ function collectConvAttachments_(convId) {
   return out;
 }
 
-/* Image inline embarquée (signature, logo) : media_type "image" + nom auto-généré
- * type image001.png / image002.jpg (Outlook/Exchange/Apple Mail). On l'exclut de la
- * liste des PJ — c'est ce que fait Missive dans son propre affichage. L'API REST
- * n'expose pas de flag inline ni de content-id, ce pattern est le signal fiable. */
-function isInlineImage_(a) {
+/* Image décorative à exclure (signature, logo, icône réseau social, bandeau).
+ * Ne s'applique qu'aux images : les PDF et autres docs passent toujours.
+ * Une image est gardée seulement si elle a une vraie valeur (photo, scan, capture).
+ * L'API REST Missive n'expose ni flag inline ni content-id, donc on combine :
+ *  a) référencée dans le corps du message (cid embarqué) → décorative ;
+ *  b) nom typique (image001, logo, signature, bandeau, réseaux sociaux) ;
+ *  c) trop petite (< 50 Ko ou < 400 px) ou bandeau très allongé. */
+function isDecorativeImage_(a, bodyHtml) {
   var mt = String(a.media_type || '').toLowerCase();
+  if (mt !== 'image') return false;                 // PDF / docs : jamais filtrés ici
   var fn = String(a.filename || a.name || '');
-  return mt === 'image' && /^image\d+\.[a-z0-9]+$/i.test(fn);
+  var fnl = fn.toLowerCase();
+  // a) embarquée inline (le nom de fichier apparaît dans le corps HTML via cid)
+  if (bodyHtml && fn && String(bodyHtml).indexOf(fn) !== -1) return true;
+  // b) noms décoratifs / icônes réseaux sociaux
+  if (/^image\d+\.[a-z0-9]+$/.test(fnl)) return true;
+  if (/(logo|signature|sign[-_]?off|banner|banniere|ent[eê]te|icon|icone|avatar|footer|header|spacer|pixel|emoji|facebook|twitter|linkedin|youtube|instagram|tiktok|whatsapp|telegram)/.test(fnl)) return true;
+  // c) trop petite pour avoir de la valeur, ou bandeau très allongé
+  var size = Number(a.size) || 0;
+  var w = Number(a.width) || 0, h = Number(a.height) || 0;
+  if (size && size < 50 * 1024) return true;
+  if (w && h) {
+    if (Math.max(w, h) < 400) return true;
+    if (w / h > 4 || h / w > 4) return true;
+  }
+  return false;
 }
 
 /* Extension minuscule pour le badge frontend. Préfère a.extension,
@@ -839,7 +857,7 @@ function handleBriefPodcast_(body) {
       var txt = htmlToText_(m.body || m.preview || '');
       if (txt) parts.push((who ? who + ' :\n' : '') + txt);
       (m.attachments || []).forEach(function (a) {
-        if (isInlineImage_(a)) return;
+        if (isDecorativeImage_(a, m.body)) return;
         var id = a.id || '';
         var name = a.filename || a.name || '(sans nom)';
         var key = name + '|' + (a.size || '');
