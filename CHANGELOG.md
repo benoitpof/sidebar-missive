@@ -2,6 +2,16 @@
 
 Versions notables. Date au format YYYY-MM-DD.
 
+## v1.14 — 2026-06-10
+
+**Le résumé de la conversation se remplit tout seul.** L'onglet Conv. affichait un champ « Résumé de la conversation » vide en permanence : le frontend appelait `analyze_content` en ne passant que `conversation_id`, et le backend court-circuitait l'appel IA quand sujet + instructions étaient absents. Résultat : placeholder permanent, jamais de résumé.
+
+**Frontend** (`sidebar.js`). `loadContent` récupère désormais le texte réel du thread via le SDK Missive (`Missive.fetchMessages`, avec fallback sur les previews/bodies déjà présents sur l'objet conversation) et l'envoie à `analyze_content` avec le sujet, le contact principal et les instructions Notion. Nouveaux helpers `fetchConvText()` + `htmlToText()`. Transcript borné à 12k chars, 12 derniers messages. `S.conversation` stocke l'objet conversation courant.
+
+**Backend** (`Code.gs`). `handleAnalyzeContent_` accepte le champ `conv_text`, le garde-fou ne court-circuite plus si un fil est présent, et le prompt résume le contenu réel de l'échange (où on en est, demande de fond, actionnable). `max_tokens` 400 → 500. Contrat de retour inchangé (`{summary, attachments, sources}`).
+
+**Zéro breaking change** : champs ajoutés, rien renommé.
+
 ## v1.13 — 2026-06-08
 
 **Recherche Folk plus permissive + réconciliation manuelle.** Deux chantiers pour corriger les contacts qui existent dans Folk mais reviennent « Non trouvé ».

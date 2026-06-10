@@ -45,7 +45,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.13', agents: Object.keys(AGENTS) }; break;
+      case 'ping':                       result = { ok: true, version: '1.14', agents: Object.keys(AGENTS) }; break;
       case 'agent_invoke':               result = handleAgentInvoke_(body);           break;
       case 'agent_list':                 result = handleAgentList_();                 break;
       // v1.10 — Spec 2 V1 (agent sidebar + apprentissage observationnel)
@@ -103,7 +103,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.13', agents: Object.keys(AGENTS) });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.14', agents: Object.keys(AGENTS) });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -129,9 +129,12 @@ function handleAnalyzeContent_(body) {
   var mainEmail = (body.main && body.main.email) || '';
   var personInstr = String(body.person_instructions || '');
   var convInstr   = String(body.conv_instructions || '');
+  var convText    = String(body.conv_text || '');
+  // Garde-fou taille : on borne le transcript envoyé à l'IA (12k chars côté front, on re-coupe ici)
+  if (convText.length > 14000) convText = convText.slice(0, 14000);
 
   // Pas d'info → réponse vide rapide, pas d'appel IA
-  if (!subject && !personInstr && !convInstr) {
+  if (!convText && !subject && !personInstr && !convInstr) {
     return { summary: '', attachments: [], sources: [] };
   }
 
@@ -141,11 +144,14 @@ function handleAnalyzeContent_(body) {
 
   var system = 'Tu es un assistant qui résume une conversation Missive pour Benoit (CEO POF). ' +
     'Réponds UNIQUEMENT en JSON valide, sans markdown : ' +
-    '{"summary":"résumé 2-3 phrases", "sources":[{"type":"linkedin|web|other", "url":"...", "label":"..."}]}. ' +
-    'Si tu n as pas d url évidente, sources = []. Le résumé doit pointer ce qui est actionnable.';
+    '{"summary":"résumé 2-4 phrases", "sources":[{"type":"linkedin|web|other", "url":"...", "label":"..."}]}. ' +
+    'Résume le fil de la conversation (le contenu réel des messages) en français : où on en est, ' +
+    'la demande ou le sujet de fond, et ce qui est actionnable pour Benoit. Pas d em-dashes, pas d invention. ' +
+    'Si tu n as pas d url évidente, sources = []. Si le fil est vide, résume à partir du sujet et des instructions.';
 
   var prompt = 'Contact principal : ' + mainName + ' (' + mainEmail + ')\n' +
     (subject ? 'Sujet : ' + subject + '\n' : '') +
+    (convText ? '\n--- Fil de la conversation ---\n' + convText + '\n--- fin du fil ---\n' : '') +
     (personInstr ? '\nInstructions Notion personne :\n' + personInstr + '\n' : '') +
     (convInstr ? '\nInstructions Notion conv :\n' + convInstr + '\n' : '');
 
@@ -153,7 +159,7 @@ function handleAnalyzeContent_(body) {
     method: 'post', contentType: 'application/json',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
     payload: JSON.stringify({
-      model: ANTHROPIC_MODEL, max_tokens: 400, system: system,
+      model: ANTHROPIC_MODEL, max_tokens: 500, system: system,
       messages: [{ role: 'user', content: prompt }]
     }), muteHttpExceptions: true
   });

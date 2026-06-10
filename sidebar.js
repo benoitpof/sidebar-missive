@@ -69,6 +69,7 @@ const CFG = {
    ════════════════════════════════════════════════════════ */
 const S = {
   conversationId: null,
+  conversation:   null,  // dernier objet conversation Missive (pour extraire le texte du thread)
   participants:   [],
   main:           null,
   others:         [],
@@ -869,6 +870,7 @@ function bootMissive(attempt = 0) {
 async function handleConversation(id, conversation) {
   if (id === S.conversationId) return;
   S.conversationId = id;
+  S.conversation   = conversation || null;
   S.convPageId     = null;
   S.convOrigText   = '';
   S.convSuggested  = false;
@@ -2829,7 +2831,18 @@ function bucketLabel(iso) {
 const ContentState = { summary: '', attachments: [], sources: [] };
 
 async function loadContent(convId) {
-  const r = await callProxy('analyze_content', { conversation_id: convId });
+  // Le résumé se remplit tout seul : on envoie au backend le texte réel du thread
+  // (récupéré via le SDK Missive) en plus du sujet et des instructions Notion.
+  const convText = await fetchConvText(S.conversation);
+  if (convId !== S.conversationId) return;
+  const r = await callProxy('analyze_content', {
+    conversation_id:     convId,
+    subject:             S.convSubject || '',
+    main:                S.main ? { name: S.main.name, email: S.main.email } : null,
+    conv_text:           convText,
+    person_instructions: S.mainNotion?.person_instructions || '',
+    conv_instructions:   S.convOrigText || '',
+  });
   if (convId !== S.conversationId) return;
   ContentState.summary     = r?.summary || '';
   ContentState.attachments = Array.isArray(r?.attachments) ? r.attachments : [];
@@ -2837,6 +2850,44 @@ async function loadContent(convId) {
   renderMailSummary();
   renderAttachments();
   renderSources();
+}
+
+/* Strip HTML → texte brut (le SDK Missive renvoie des corps de messages en HTML). */
+function htmlToText(s) {
+  const d = document.createElement('div');
+  d.innerHTML = String(s || '');
+  return (d.textContent || d.innerText || '').replace(/[ \t]+\n/g, '\n').trim();
+}
+
+/* Construit un transcript texte du thread Missive pour le résumé IA.
+ * Tente d'enrichir avec les corps complets via Missive.fetchMessages ;
+ * retombe sur les previews/bodies déjà présents sur l'objet conversation. */
+async function fetchConvText(conv) {
+  try {
+    let msgs = Array.isArray(conv?.messages) ? conv.messages.slice() : [];
+    // Enrichissement : corps complets via le SDK (les objets conv n'ont souvent qu'un preview)
+    const ids = msgs.map(m => m && m.id).filter(Boolean);
+    if (ids.length && window.Missive && typeof Missive.fetchMessages === 'function') {
+      try {
+        const full = await Missive.fetchMessages(ids);
+        if (Array.isArray(full) && full.length) msgs = full;
+      } catch (e) { console.warn('[POF] fetchMessages failed:', e); }
+    }
+    if (!msgs.length && conv?.latest_message) msgs = [conv.latest_message];
+    const parts = msgs.slice(-12).map(m => {
+      const f   = m.from_field || {};
+      const who = f.name || f.address || '';
+      const txt = htmlToText(m.body || m.preview || m.text || '');
+      if (!txt) return '';
+      return (who ? who + ' :\n' : '') + txt;
+    }).filter(Boolean);
+    let out = parts.join('\n\n---\n\n');
+    if (out.length > 12000) out = out.slice(0, 12000) + '…';
+    return out;
+  } catch (e) {
+    console.warn('[POF] fetchConvText error:', e);
+    return '';
+  }
 }
 
 function renderMailSummary() {
