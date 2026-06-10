@@ -45,7 +45,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.16.1', agents: Object.keys(AGENTS) }; break;
+      case 'ping':                       result = { ok: true, version: '1.16.2', agents: Object.keys(AGENTS) }; break;
       case 'agent_invoke':               result = handleAgentInvoke_(body);           break;
       case 'agent_list':                 result = handleAgentList_();                 break;
       // v1.10 — Spec 2 V1 (agent sidebar + apprentissage observationnel)
@@ -76,6 +76,7 @@ function doPost(e) {
       case 'reconcile_folk':             result = handleReconcileFolk_(body);         break;
       // v1.8 — nouveaux endpoints sidebar v4
       case 'analyze_content':            result = handleAnalyzeContent_(body);        break;
+      case 'list_attachments':           result = handleListAttachments_(body);       break;
       case 'brief_attachment':           result = handleBriefAttachment_(body);       break;
       case 'follow_source':              result = handleFollowSource_(body);          break;
       case 'list_timeline':              result = handleListTimeline_(body);          break;
@@ -103,7 +104,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.16.1', agents: Object.keys(AGENTS) });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.16.2', agents: Object.keys(AGENTS) });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -180,6 +181,14 @@ function handleAnalyzeContent_(body) {
     attachments: attachments,
     sources: (parsed && Array.isArray(parsed.sources)) ? parsed.sources : []
   };
+}
+
+/* ─── list_attachments : PJ seules, sans IA (rapide, ~0.5s) ───
+ * Appel dédié pour afficher les pièces jointes immédiatement, sans attendre
+ * le résumé IA de analyze_content. */
+function handleListAttachments_(body) {
+  var convId = String(body.conversation_id || '');
+  return { attachments: collectConvAttachments_(convId) };
 }
 
 /* ─── Pièces jointes d'une conversation (Missive API) ──────────

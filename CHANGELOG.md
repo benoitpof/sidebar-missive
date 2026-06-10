@@ -2,6 +2,10 @@
 
 Versions notables. Date au format YYYY-MM-DD.
 
+## v1.16.2 — 2026-06-10
+
+**Les pièces jointes s'affichent avant le résumé.** Elles étaient bundlées dans la réponse de `analyze_content` (qui attend Claude) → elles n'apparaissaient qu'une fois le résumé généré. Nouvel endpoint backend `list_attachments` (PJ seules via `collectConvAttachments_`, pas d'IA, ~0.5s). Frontend `loadContent` appelle `list_attachments` en premier et rend les PJ immédiatement, puis `analyze_content` pour le résumé + sources en parallèle (fallback PJ conservé si l'appel rapide échoue). Aucun changement de payload ni de webhook.
+
 ## v1.16.1 — 2026-06-10
 
 **Génération du briefing alignée sur la skill `/podcast-generator`.** Le transport était déjà identique à la skill (POST `{Texte_a_lire}` sur le hook `…/uwyi8u9/` — le code ne touche jamais ElevenLabs ; la mention « ElevenLabs » du hub Notion est périmée). Reste l'alignement de la génération : le prompt système de `handleBriefPodcast_` reprend les directives de la skill (briefing qui filtre et non résume, voix CFO, patterns interdits zéro-tolérance, hiérarchie GARDER/TUER, structure accroche/corps/bottom-line, format audio sans listes, chiffres en toutes lettres, max 1000 mots) en conservant la lecture/analyse des PDF et l'intégration des sources de v1.16. `max_tokens` 1500 → 2000. Webhook et payload inchangés.

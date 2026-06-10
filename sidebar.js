@@ -2817,8 +2817,16 @@ function bucketLabel(iso) {
 const ContentState = { summary: '', attachments: [], sources: [] };
 
 async function loadContent(convId) {
-  // Le résumé se remplit tout seul : on envoie au backend le texte réel du thread
-  // (récupéré via le SDK Missive) en plus du sujet et des instructions Notion.
+  // 1. Pièces jointes d'abord : appel dédié rapide (Missive API, pas d'IA),
+  //    rendu quasi instantané sans attendre le résumé.
+  callProxy('list_attachments', { conversation_id: convId }).then(r => {
+    if (convId !== S.conversationId) return;
+    ContentState.attachments = Array.isArray(r?.attachments) ? r.attachments : [];
+    renderAttachments();
+  }).catch(() => {});
+
+  // 2. Résumé + sources : appel IA (plus lent), en parallèle. On envoie au backend
+  //    le texte réel du thread (SDK Missive) + sujet + instructions Notion.
   const convText = await fetchConvText(S.conversation);
   if (convId !== S.conversationId) return;
   const r = await callProxy('analyze_content', {
@@ -2830,11 +2838,14 @@ async function loadContent(convId) {
     conv_instructions:   S.convOrigText || '',
   });
   if (convId !== S.conversationId) return;
-  ContentState.summary     = r?.summary || '';
-  ContentState.attachments = Array.isArray(r?.attachments) ? r.attachments : [];
-  ContentState.sources     = Array.isArray(r?.sources) ? r.sources : [];
+  ContentState.summary = r?.summary || '';
+  ContentState.sources = Array.isArray(r?.sources) ? r.sources : [];
+  // Fallback PJ : si list_attachments n'a rien renvoyé, on récupère via analyze_content.
+  if (!ContentState.attachments.length && Array.isArray(r?.attachments) && r.attachments.length) {
+    ContentState.attachments = r.attachments;
+    renderAttachments();
+  }
   renderMailSummary();
-  renderAttachments();
   renderSources();
 }
 
