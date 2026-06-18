@@ -1078,11 +1078,11 @@ const SHEET_TEMPLATES = {
             </span>
             <span class="sig-action-arrow">${icon('arrow')}</span>
           </button>
-          <button class="sig-action" type="button" data-sig-action="sign_documents">
+          <button class="sig-action" type="button" data-sig-action="sign_documents" id="sig-btn-sign-docs">
             <span class="sig-action-icon">${icon('signature')}</span>
             <span class="sig-action-body">
-              <span class="sig-action-title">Signature des documents</span>
-              <span class="sig-action-sub">Envoi à DocuSign avec les signataires identifiés.</span>
+              <span class="sig-action-title" id="sig-sign-title">Signature des documents</span>
+              <span class="sig-action-sub" id="sig-sign-sub">Envoi à DocuSign avec les signataires identifiés.</span>
             </span>
             <span class="sig-action-arrow">${icon('arrow')}</span>
           </button>
@@ -1220,7 +1220,31 @@ function wireFeedbackSheet() {
   });
 }
 
+// Détecte si le mail courant est une demande de signature Odoo Sign
+function isOdooSignRequest() {
+  const subj = (S.convSubject || '').toLowerCase();
+  return subj.includes('demande de signature');
+}
+
+// Extrait le nom du doc depuis le sujet "Demande de signature - nom_doc.pdf"
+function odooSignDocName() {
+  const subj = S.convSubject || '';
+  const m = subj.match(/demande de signature\s*[-–]\s*(.+)/i);
+  return m ? m[1].trim() : subj;
+}
+
 function wireSignatureSheet() {
+  // Adapt sign_documents button label when Odoo Sign context is detected
+  const odoo = isOdooSignRequest();
+  const titleEl = document.getElementById('sig-sign-title');
+  const subEl   = document.getElementById('sig-sign-sub');
+  if (odoo && titleEl) {
+    titleEl.textContent = 'Valider ma signature Odoo';
+    subEl.textContent   = 'Signe ce document directement via Odoo Sign — sans quitter Missive.';
+    const btn = document.getElementById('sig-btn-sign-docs');
+    if (btn) btn.setAttribute('data-odoo-sign', '1');
+  }
+
   // Populate the attachment picker with the conversation's attachments.
   const list = document.getElementById('sig-attachment-list');
   if (list) {
@@ -1230,7 +1254,6 @@ function wireSignatureSheet() {
     } else {
       list.innerHTML = items.map((a, i) => {
         const badge = fileTypeBadge(a.type);
-        // Default: first attachment checked, others unchecked. The user adjusts as needed.
         const checked = i === 0 ? 'checked' : '';
         return `
           <label class="sig-att" data-att-id="${esc(a.id)}">
@@ -1244,20 +1267,29 @@ function wireSignatureSheet() {
       }).join('');
     }
   }
+
   // Wire each action button
   document.querySelectorAll('[data-sig-action]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const action = btn.dataset.sigAction;
-      const selected = [...document.querySelectorAll('[data-sig-att]:checked')].map(cb => cb.dataset.sigAtt);
-      const fakeBtn = document.getElementById('fa-signature');
-      // Labels for toast confirmation
+      const action    = btn.dataset.sigAction;
+      const isOdoo    = btn.getAttribute('data-odoo-sign') === '1';
+      const selected  = [...document.querySelectorAll('[data-sig-att]:checked')].map(cb => cb.dataset.sigAtt);
+      const footerBtn = document.getElementById('fa-signature');
+
+      // ── Odoo Sign flow : popup de confirmation puis signature directe ──
+      if (action === 'sign_documents' && isOdoo) {
+        showOdooSignConfirm(footerBtn);
+        return;
+      }
+
+      // ── Flow standard (DocuSign / NDA / analyse) ──
       const labels = {
-        legal_analysis: "Analyse juridique lancée",
-        sign_documents: "Documents envoyés en signature",
-        generate_nda:   "NDA généré dans la conversation",
+        legal_analysis: 'Analyse juridique lancée',
+        sign_documents: 'Documents envoyés en signature',
+        generate_nda:   'NDA généré dans la conversation',
       };
       closeSheet();
-      if (fakeBtn) markFooterDone(fakeBtn);
+      if (footerBtn) markFooterDone(footerBtn);
       toast(labels[action] || 'Action lancée');
       callProxy('signature_action', {
         action,
@@ -1269,6 +1301,88 @@ function wireSignatureSheet() {
       }).catch(() => toast('Erreur réseau', 'error'));
     });
   });
+}
+
+// Affiche le popup de confirmation Odoo Sign dans le sheet (sans fermer la sidebar)
+function showOdooSignConfirm(footerBtn) {
+  const docName = odooSignDocName();
+  const today   = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const body    = document.getElementById('sheet-content');
+  if (!body) return;
+
+  body.innerHTML = `
+    <div class="odoo-confirm" id="odoo-confirm-panel">
+      <div class="odoo-confirm-doc">
+        <span class="odoo-confirm-icon">${icon('signature')}</span>
+        <span class="odoo-confirm-name">${esc(docName)}</span>
+      </div>
+      <div class="odoo-confirm-fields">
+        <div class="ocf-label">Ce qui sera signé automatiquement :</div>
+        <ul class="ocf-list">
+          <li><span class="ocf-key">Signature</span><span class="ocf-val">ta signature Odoo</span></li>
+          <li><span class="ocf-key">Nom</span><span class="ocf-val">Benoit BLANCHER</span></li>
+          <li><span class="ocf-key">Fait à</span><span class="ocf-val">Dakar</span></li>
+          <li><span class="ocf-key">Date</span><span class="ocf-val">${esc(today)}</span></li>
+        </ul>
+      </div>
+      <div class="odoo-confirm-actions">
+        <button class="btn btn-ghost" id="odoo-cancel">Annuler</button>
+        <button class="btn btn-primary odoo-sign-btn" id="odoo-sign-confirm">
+          ${icon('signature')} Signer maintenant
+        </button>
+      </div>
+    </div>`;
+
+  document.getElementById('odoo-cancel').addEventListener('click', closeSheet);
+
+  document.getElementById('odoo-sign-confirm').addEventListener('click', () => {
+    const confirmBtn = document.getElementById('odoo-sign-confirm');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Signature en cours…';
+
+    callProxy('odoo_sign', {
+      conversation_id: S.conversationId,
+      subject: S.convSubject || '',
+      doc_name: docName,
+      lieu: 'Dakar',
+      nom: 'Benoit BLANCHER',
+    }).then(r => {
+      if (r && r.success === false) {
+        showOdooSignResult(false, r.error || 'Erreur lors de la signature', docName, footerBtn);
+      } else {
+        showOdooSignResult(true, null, docName, footerBtn);
+      }
+    }).catch(() => showOdooSignResult(false, 'Erreur réseau', docName, footerBtn));
+  });
+}
+
+// Remplace le contenu du sheet par le résultat (✅ ou ❌) — reste ouvert pour que ce soit visible
+function showOdooSignResult(success, errorMsg, docName, footerBtn) {
+  const body = document.getElementById('sheet-content');
+  if (!body) return;
+  const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  if (success) {
+    if (footerBtn) markFooterDone(footerBtn);
+    body.innerHTML = `
+      <div class="odoo-result odoo-result--ok">
+        <div class="odoo-result-icon">✅</div>
+        <div class="odoo-result-title">Document signé</div>
+        <div class="odoo-result-doc">${esc(docName)}</div>
+        <div class="odoo-result-meta">Signé par Benoit BLANCHER · Fait à Dakar · ${esc(today)}</div>
+        <button class="btn btn-ghost odoo-result-close" id="odoo-result-close">Fermer</button>
+      </div>`;
+  } else {
+    body.innerHTML = `
+      <div class="odoo-result odoo-result--err">
+        <div class="odoo-result-icon">⚠️</div>
+        <div class="odoo-result-title">Signature impossible</div>
+        <div class="odoo-result-doc">${esc(docName)}</div>
+        <div class="odoo-result-meta">${esc(errorMsg || 'Erreur inconnue')}</div>
+        <button class="btn btn-ghost odoo-result-close" id="odoo-result-close">Fermer</button>
+      </div>`;
+  }
+  document.getElementById('odoo-result-close')?.addEventListener('click', closeSheet);
 }
 
 function prefillSheetNda() {

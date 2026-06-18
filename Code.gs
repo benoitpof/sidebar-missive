@@ -45,7 +45,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.16.4', agents: Object.keys(AGENTS) }; break;
+      case 'ping':                       result = { ok: true, version: '1.17.0', agents: Object.keys(AGENTS) }; break;
       case 'agent_invoke':               result = handleAgentInvoke_(body);           break;
       case 'agent_list':                 result = handleAgentList_();                 break;
       // v1.10 — Spec 2 V1 (agent sidebar + apprentissage observationnel)
@@ -91,6 +91,7 @@ function doPost(e) {
       case 'regen_situation':            result = handleRegenSituation_(body);        break;
       case 'ask_agent':                  result = handleAskAgentWithLogging_(body);   break;
       case 'signature_action':           result = handleSignatureAction_(body);       break;
+      case 'odoo_sign':                  result = handleOdooSign_(body);             break;
       // Alias quand le frontend écrase la routing key avec action: 'legal_analysis|sign_documents|generate_nda'
       case 'legal_analysis':             result = handleSignatureAction_({ ...body, sub_action: 'legal_analysis' });  break;
       case 'sign_documents':             result = handleSignatureAction_({ ...body, sub_action: 'sign_documents' });  break;
@@ -104,7 +105,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.16.4', agents: Object.keys(AGENTS) });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.17.0', agents: Object.keys(AGENTS) });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -563,6 +564,135 @@ function handleUpdateSituation_(body) {
    ce qui écrase la routing key. On accepte donc sub_action/kind/sig_action
    en priorité, et fallback sur body.action si le switch nous a routés ici. */
 const SLACK_LEGAL_CHANNEL = '#ai-assistan-legal';
+
+/* ─── odoo_sign : signe en direct via Odoo JSON-RPC ─── */
+/*
+ * Connexion Odoo JSON-RPC (prod) :
+ *   URL  : https://po-factories-production.odoo.com
+ *   DB   : po-factories-production
+ *   User : benoit+apiuser@plasticodyssey.org (res.users id 80)
+ *   Key  : secret Doppler ODOO_API_KEY_APIUSER
+ *
+ * Profil signataire V1 (statique) :
+ *   Nom      : "Benoit BLANCHER"
+ *   Fait à   : "Dakar" (ou body.lieu)
+ *   Date     : date du jour
+ *
+ * Retourne { success: true, doc_name, signed_at } ou { success: false, error }
+ */
+var ODOO_URL = 'https://po-factories-production.odoo.com';
+var ODOO_DB  = 'po-factories-production';
+
+function handleOdooSign_(body) {
+  var docName    = String(body.doc_name || body.subject || '');
+  var lieu       = String(body.lieu || 'Dakar');
+  var signerName = String(body.nom  || 'Benoit BLANCHER');
+  var today      = Utilities.formatDate(new Date(), 'Europe/Paris', 'dd/MM/yyyy');
+
+  try {
+    var apiKey = getSecret_('ODOO_API_KEY_APIUSER');
+
+    // ── 1. Authentification JSON-RPC → uid ──
+    var uid = odooRpc_('common', 'authenticate', [ODOO_DB, 'benoit+apiuser@plasticodyssey.org', apiKey, {}]);
+    if (!uid) return { success: false, error: 'Authentification Odoo échouée' };
+
+    // ── 2. Trouver les sign.request.item en attente pour Benoît ──
+    var items = odooCall_(uid, apiKey, 'sign.request.item', 'search_read',
+      [[['signer_email', '=', 'benoit@plasticodyssey.org'], ['state', '=', 'sent']]],
+      { fields: ['id', 'sign_request_id', 'role_id'] }
+    );
+
+    // Filtrer : émetteur = Ouraye (create_uid 59), sign.request à l'état sent
+    var target = null;
+    for (var i = 0; i < items.length; i++) {
+      var reqId = items[i].sign_request_id && items[i].sign_request_id[0];
+      if (!reqId) continue;
+      var reqs = odooCall_(uid, apiKey, 'sign.request', 'read',
+        [[reqId]],
+        { fields: ['id', 'reference', 'state', 'create_uid', 'template_id'] }
+      );
+      var req = reqs && reqs[0];
+      if (req && req.state === 'sent' && req.create_uid && req.create_uid[0] === 59) {
+        target = { item: items[i], req: req };
+        break;
+      }
+    }
+
+    if (!target) {
+      return { success: false, error: 'Aucune demande d\'Ouraye en attente de ta signature. Elle est peut-être déjà signée ou expirée.' };
+    }
+
+    var itemId     = target.item.id;
+    var roleId     = target.item.role_id && target.item.role_id[0];
+    var templateId = target.req.template_id && target.req.template_id[0];
+
+    // ── 3. Identifier les champs du template pour ce rôle ──
+    var signItems = odooCall_(uid, apiKey, 'sign.item', 'search_read',
+      [[['template_id', '=', templateId], ['responsible_id', '=', roleId]]],
+      { fields: ['id', 'type_id', 'name', 'required'] }
+    );
+
+    // ── 4. Charger la signature stockée du compte Benoît (id 2) ──
+    var users = odooCall_(uid, apiKey, 'res.users', 'read',
+      [[2]],
+      { fields: ['sign_signature', 'sign_initials'] }
+    );
+    var userData = users && users[0];
+    if (!userData || !userData.sign_signature) {
+      return { success: false, error: 'Aucune signature enregistrée dans Odoo. Va dans Préférences > Signature pour en déposer une.' };
+    }
+    var sigBlob  = userData.sign_signature;
+    var initBlob = userData.sign_initials || sigBlob;
+
+    // ── 5. Construire le payload { sign_item_id: valeur } ──
+    var payload = {};
+    for (var j = 0; j < signItems.length; j++) {
+      var si       = signItems[j];
+      var typeSlug = (si.type_id && si.type_id[1] ? si.type_id[1] : '').toLowerCase();
+      if (typeSlug === 'signature')                           { payload[String(si.id)] = sigBlob;    }
+      else if (typeSlug === 'initials' || typeSlug === 'initial') { payload[String(si.id)] = initBlob;   }
+      else if (typeSlug === 'name'   || si.name === 'Nom')   { payload[String(si.id)] = signerName; }
+      else if (typeSlug === 'date')                          { payload[String(si.id)] = today;       }
+      else if (typeSlug === 'text')                          { payload[String(si.id)] = lieu;        }
+      // Autres types (checkbox, radio…) : skippés en V1
+    }
+
+    // ── 6. Appeler sign.request.item.sign() ──
+    odooCall_(uid, apiKey, 'sign.request.item', 'sign', [[itemId], payload], {});
+
+    return {
+      success:    true,
+      doc_name:   target.req.reference || docName,
+      signed_at:  today,
+      request_id: target.req.id,
+    };
+
+  } catch (e) {
+    return { success: false, error: String((e && e.message) || e) };
+  }
+}
+
+/* ─── Helpers JSON-RPC Odoo ─── */
+function odooRpc_(service, method, args) {
+  var resp = UrlFetchApp.fetch(ODOO_URL + '/jsonrpc', {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      jsonrpc: '2.0', method: 'call', id: 1,
+      params: { service: service, method: method, args: args },
+    }),
+    muteHttpExceptions: true,
+  });
+  var data = JSON.parse(resp.getContentText());
+  if (data.error) throw new Error('Odoo RPC error: ' + JSON.stringify(data.error).slice(0, 300));
+  return data.result;
+}
+
+function odooCall_(uid, apiKey, model, method, args, kwargs) {
+  return odooRpc_('object', 'execute_kw', [
+    ODOO_DB, uid, apiKey, model, method, args, kwargs || {},
+  ]);
+}
 
 function handleSignatureAction_(body) {
   var action = String(body.sub_action || body.kind || body.sig_action || body.action || '');
