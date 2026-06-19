@@ -656,9 +656,10 @@ function handleOdooSign_(body) {
     var templateId = target.req.template_id && target.req.template_id[0];
 
     // ── 3. Identifier les champs du template pour ce rôle ──
+    //   page/posX servent à écarter les champs fantômes non placés sur le PDF (page=-1).
     var signItems = odooCall_(uid, apiKey, 'sign.item', 'search_read',
       [[['template_id', '=', templateId], ['responsible_id', '=', roleId]]],
-      { fields: ['id', 'type_id', 'name', 'required'] }
+      { fields: ['id', 'type_id', 'name', 'required', 'page', 'posX'] }
     );
 
     // ── 4. Charger la signature enregistrée sur le compte Benoît ──
@@ -678,6 +679,9 @@ function handleOdooSign_(body) {
     var payload = {};
     for (var j = 0; j < signItems.length; j++) {
       var si       = signItems[j];
+      // Ignorer les champs non posés sur le document (page/posX = -1) : artefacts de template,
+      // rejetés par Odoo avec "Some unauthorised items are filled".
+      if (Number(si.page) < 0 || Number(si.posX) < 0) continue;
       var typeSlug = (si.type_id && si.type_id[1] ? si.type_id[1] : '').toLowerCase();
       if (typeSlug === 'signature')                           { payload[String(si.id)] = sigBlob;    }
       else if (typeSlug === 'initials' || typeSlug === 'initial') { payload[String(si.id)] = initBlob;   }
