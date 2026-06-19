@@ -641,8 +641,9 @@ function handleOdooSign_(body) {
     if (!userData || !userData.sign_signature) {
       return { success: false, error: 'Aucune signature enregistrée dans Odoo. Va dans Préférences > Signature pour en déposer une.' };
     }
-    var sigBlob  = userData.sign_signature;
-    var initBlob = userData.sign_initials || sigBlob;
+    // Le contrôleur /sign/sign attend des data URLs PNG ; res.users stocke du base64 brut.
+    var sigBlob  = asPngDataUrl_(userData.sign_signature);
+    var initBlob = asPngDataUrl_(userData.sign_initials || userData.sign_signature);
 
     // ── 5. Construire le payload { sign_item_id: valeur } ──
     var payload = {};
@@ -657,10 +658,15 @@ function handleOdooSign_(body) {
       // Autres types (checkbox, radio…) : skippés en V1
     }
 
-    // ── 6. Signer via le contrôleur web Odoo (sign() exige sudo, impossible en JSON-RPC) ──
+    // ── 6. Signer via le contrôleur web public Odoo /sign/sign/<request_id>/<access_token> ──
+    //   sign.request.item.sign() exige sudo → impossible en JSON-RPC direct.
+    //   Cette route (type=json, auth=public) gère le sudo côté serveur. Vérifiée prod Odoo 19.
     var accessToken = target.item.access_token;
     if (!accessToken) throw new Error('access_token absent sur sign.request.item ' + itemId);
-    var signUrl = ODOO_URL + '/sign/sign_request_item/sign/' + target.req.id + '/' + accessToken;
+    if (!payload || Object.keys(payload).length === 0) {
+      throw new Error('Aucun champ à signer trouvé pour le rôle ' + roleId + ' (template ' + templateId + ').');
+    }
+    var signUrl = ODOO_URL + '/sign/sign/' + target.req.id + '/' + accessToken;
     var signResp = UrlFetchApp.fetch(signUrl, {
       method: 'post',
       contentType: 'application/json',
@@ -675,11 +681,16 @@ function handleOdooSign_(body) {
       throw new Error('[Sign HTTP ' + signStatus + (location ? ' → ' + location : '') + '] ' + signBody.slice(0, 200));
     }
     if (signBody.trim().charAt(0) === '<') {
-      throw new Error('[Sign 200 HTML] ' + signBody.slice(0, 250));
+      throw new Error('[Sign HTML inattendu] ' + signBody.slice(0, 200));
     }
     var signData = JSON.parse(signBody);
     if (signData.error) {
       throw new Error('Odoo Sign error: ' + JSON.stringify(signData.error.data || signData.error).slice(0, 300));
+    }
+    var signResult = signData.result || {};
+    if (!signResult.success) {
+      throw new Error('Signature refusée par Odoo (success=false). Réponse: ' +
+        JSON.stringify(signResult).slice(0, 250) + ' | champs envoyés: ' + Object.keys(payload).join(','));
     }
 
     return {
@@ -695,6 +706,14 @@ function handleOdooSign_(body) {
 }
 
 /* ─── Helpers JSON-RPC Odoo ─── */
+
+// res.users stocke les signatures en base64 brut ; le contrôleur /sign/sign
+// attend un data URL PNG (comme le widget de signature Odoo). Conversion idempotente.
+function asPngDataUrl_(b64) {
+  if (!b64) return b64;
+  return String(b64).indexOf('data:') === 0 ? b64 : 'data:image/png;base64,' + b64;
+}
+
 function odooRpc_(service, method, args) {
   var resp = UrlFetchApp.fetch(ODOO_URL + '/jsonrpc', {
     method: 'post',
