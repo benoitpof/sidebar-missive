@@ -666,8 +666,18 @@ function handleOdooSign_(body) {
       contentType: 'application/json',
       payload: JSON.stringify({ jsonrpc: '2.0', method: 'call', id: 1, params: { signature: payload } }),
       muteHttpExceptions: true,
+      followRedirects: false,
     });
-    var signData = JSON.parse(signResp.getContentText());
+    var signStatus = signResp.getResponseCode();
+    var signBody   = signResp.getContentText();
+    if (signStatus !== 200) {
+      var location = signResp.getHeaders()['Location'] || '';
+      throw new Error('[Sign HTTP ' + signStatus + (location ? ' → ' + location : '') + '] ' + signBody.slice(0, 200));
+    }
+    if (signBody.trim().charAt(0) === '<') {
+      throw new Error('[Sign 200 HTML] ' + signBody.slice(0, 250));
+    }
+    var signData = JSON.parse(signBody);
     if (signData.error) {
       throw new Error('Odoo Sign error: ' + JSON.stringify(signData.error.data || signData.error).slice(0, 300));
     }
