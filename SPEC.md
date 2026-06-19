@@ -1,6 +1,6 @@
 # POF Sidebar — Spec fonctionnelle
 
-**Version :** 3.0 · **Date :** 17 mai 2026
+**Version :** 3.1 · **Date :** 19 juin 2026
 **Fichiers :** `Sidebar.html` · `Sidebar v3.html` · `sidebar.css` · `sidebar.js` · `assets/pof-logo-color.svg` · `assets/pof-logo-variant-1.svg`
 **Contexte :** sidebar Missive pour Plastic Odyssey Factories — pont entre la conversation et le CRM Notion (avec fallback Folk), couche d'agents IA pour enrichissement, synthèse, briefing podcast, brouillon de réponse, signature de documents et gestion de tâches.
 
@@ -528,6 +528,7 @@ API uniforme par fonction métier. Spec complète : [POF Agent Registry](https:/
 | `brief_reply` | `{conversation_id, instructions}` | `{success}` |
 | `estimate_opportunity` | `{conversation_id}` | `{success}` |
 | `signature_action` | `{action: 'legal_analysis'|'sign_documents'|'generate_nda', attachment_ids: string[], conversation_id}` | `{success}` |
+| `odoo_sign` | `{conversation_id, doc_name?, subject?, lieu?, nom?}` | `{success, doc_name, signed_at, request_id}` — **vrai chemin de signature** (Odoo Sign, contrôleur `/sign/sign`). Détecté côté front quand le sujet contient « demande de signature ». Distinct de `sign_documents` (qui ne fait que filer une tâche). |
 | `ask_agent` | `{prompt, conversation_id, main?, situation?}` | `{success, reply, proposed?, situation?}` |
 | `follow_source` | `{source_id, watched, conversation_id}` | `{success}` |
 | `submit_agent_feedback` | `{text, conversation_id, situation?}` | `{success}` |
@@ -601,3 +602,98 @@ SPEC.md              ce document
 ```
 
 Cache-busting : `?v=N` sur les imports `sidebar.css` et `sidebar.js`. Bump à chaque release.
+
+---
+
+## 19. Suivi de release & validation
+
+> Tableau vivant, mis à jour à chaque test. Audit code du **19 juin 2026** (backend GAS `missive-sidebar-proxy`, ping **v1.17.0**, déploiement **v38**).
+
+**Trois colonnes de statut, à ne pas confondre :**
+- **Live** : déployé en prod. ✅ = en ligne · ❌ = pas atteignable.
+- **Fonctionnel** (vérifié par lecture du code) : ✅ réel synchrone · 🔄 réel asynchrone (le résultat arrive plus tard, en commentaire Notion/Missive) · 🟡 partiel · 🔴 stub ou simulé (ne marche pas encore).
+- **Validé** (testé et confirmé par Benoît en vrai) : ✅ validé · 🟡 prêt à valider · ⏳ à valider via le livrable async · 🔴 pas prêt.
+
+### Onglet Contact
+
+| Fonctionnalité | Action | Live | Fonct. | Validé | Comment tester |
+|---|---|:--:|:--:|:--:|---|
+| Identifier le contact principal | `lookup_person` + `dump_persons` | ✅ | ✅ | 🟡 | Ouvrir une conv → la fiche Notion s'affiche |
+| Recherche Folk (fallback) | `lookup_folk` | ✅ | ✅ | 🟡 | Conv d'un contact absent de Notion mais dans Folk |
+| Réconcilier Folk à la main | `reconcile_folk` | ✅ | ✅ | 🟡 | Coller une URL Folk sur un contact « Folk uniquement » |
+| Créer la fiche Notion | `create_person` | ✅ | ✅ | 🟡 | Sur « Non trouvé » → Créer dans Notion |
+| Instructions personne | `update_person_instructions` | ✅ | ✅ | 🟡 | Taper une note → « Sauvegardé » + vérifier Notion |
+| Étoile VIP (principal + participants) | `toggle_vip` | ✅ | ✅ | 🟡 | Cliquer l'étoile → champ VIP dans Notion |
+| Ajouter tél détecté → Notion | `add_phone_to_notion` | ✅ | ✅ | 🟡 | Sur un tél « IA détectée » → Ajouter à Notion |
+| Ajouter société/titre → Notion | `add_field_to_notion` | ✅ | ✅ | 🟡 | Idem pour société/titre |
+| Enrichir le contact | `enrich_contact` | ✅ | 🟡 | 🟡 | Écrit la consigne dans Notion ; l'enrichissement web réel est fait par un agent en aval, pas en direct |
+| Lien WhatsApp | (lien statique) | ✅ | ✅ | 🟡 | Cliquer le bouton vert → ouvre wa.me |
+
+### Onglets Conv. / Contenu
+
+| Fonctionnalité | Action | Live | Fonct. | Validé | Comment tester |
+|---|---|:--:|:--:|:--:|---|
+| Instructions conversation | `lookup_conv` / `upsert_conv` | ✅ | ✅ | 🟡 | Taper + sauvegarder + recharger |
+| Résumé du mail (IA) | `analyze_content` | ✅ | ✅ | 🟡 | Le résumé se génère sous le mail |
+| Sources identifiées + veille | `analyze_content` / `follow_source` | ✅ | ✅ | 🟡 | « Ajouter à la veille » sur une source |
+| Liste des pièces jointes | `list_attachments` | ✅ | ✅ | 🟡 | Les PJ de la conv s'affichent |
+| Briefing podcast unifié | `brief_podcast` | ✅ | 🔄 | ⏳ | Lancer → l'audio arrive en commentaire (async) |
+| Feedback règles de tri (v3) | `submit_rules_feedback` | ✅ | ✅ | 🟡 | Envoyer → vérifier la page Notion |
+| Briefing podcast d'une PJ seule | `brief_attachment` | ✅ | 🔴 | 🔴 | **Stub** : renvoie « non wiré ». À implémenter (le token Missive est pourtant dispo) |
+
+### Onglet Actions (situation + timeline + tâches)
+
+| Fonctionnalité | Action | Live | Fonct. | Validé | Comment tester |
+|---|---|:--:|:--:|:--:|---|
+| Note de situation (charge / génère) | `list_timeline` / `regen_situation` | ✅ | ✅ | 🟡 | Ouvrir l'onglet → synthèse affichée |
+| Édition inline de la situation | `update_situation` | ✅ | ✅ | 🟡 | Éditer le texte → persistance après reload |
+| Régénérer la situation | `regen_situation` | ✅ | ✅ | 🟡 | Bouton 🔄 |
+| Timeline interactions (passé) | `list_timeline` | ✅ | ✅ | 🟡 | Events passés affichés |
+| Timeline « À venir » (futur) | `list_timeline.upcoming` | ✅ | 🟡 | 🔴 | Renvoie `[]` codé en dur — events futurs pas branchés |
+| Liste des tâches | `list_tasks` | ✅ | ✅ | 🟡 | Les tâches Notion s'affichent |
+| Tâches proposées (IA) | `list_proposed_tasks` | ✅ | ✅ | 🟡 | L'IA propose 0-3 tâches |
+| Créer une tâche | `create_task` | ✅ | ✅ | 🟡 | Ajouter → vérifier Notion |
+| Cocher une tâche | `toggle_task` | ✅ | ✅ | 🟡 | Cocher → état dans Notion |
+| Éditer une tâche | `update_task` | ✅ | ✅ | 🟡 | Échéance / prio / assignation |
+| Ignorer une tâche proposée | (local) | ✅ | 🟡 | 🔴 | Local seulement — réapparaît au reload (pas persisté) |
+
+### Agent dock
+
+| Fonctionnalité | Action | Live | Fonct. | Validé | Comment tester |
+|---|---|:--:|:--:|:--:|---|
+| Chat agent | `ask_agent` | ✅ | ✅ | 🟡 | Poser une question → réponse |
+| Micro / dictée vocale | (aucune) | ✅ | 🔴 | 🔴 | **Simulé** : démo, pas de vraie reconnaissance vocale |
+
+### Footer (5 actions)
+
+| Fonctionnalité | Action | Live | Fonct. | Validé | Comment tester |
+|---|---|:--:|:--:|:--:|---|
+| 🎙 Podcast | `brief_podcast` | ✅ | 🔄 | ⏳ | Audio livré en commentaire (async) |
+| 🎯 Estimer l'opportunité | `estimate_opportunity` | ✅ | 🔄 | ⏳ | Crée une tâche Backlog IA ; valider le résultat en commentaire |
+| ✏️ Réponse (brief) | `brief_reply` | ✅ | ✅ | 🟡 | Écrit le brief dans les instructions ; le draft est rédigé par un agent en aval |
+| ✍️ Signature → Analyse juridique | `legal_analysis` | ✅ | ✅ | 🟡 | Vrai : analyse Claude + commentaire Missive + DM Slack |
+| ✍️ **Signature → Signer (Odoo)** | `odoo_sign` | ✅ | ✅ | **✅ Validé 19/06/2026** | Attestation STC Côme signée en conditions réelles |
+| ✍️ Signature → « Signer documents » | `sign_documents` | ✅ | 🔄 | ⏳ | Ne signe pas : file une tâche. Templates Odoo en attente. Doublonne `odoo_sign` |
+| ✍️ Signature → Générer NDA | `generate_nda` | ✅ | 🔄 | ⏳ | Ne génère pas : file une tâche. Template NDA Odoo en attente |
+| 💬 Feedback | `submit_agent_feedback` | ✅ | ✅ | 🟡 | Envoyer → vérifier la page Notion |
+| (Bouton NDA footer) | `send_nda` | ❌ | 🔄 | 🔴 | Câblé en JS mais **absent du HTML** → chemin mort. NDA reste accessible via la sheet Signature |
+
+### Boot / triage / système
+
+| Fonctionnalité | Action | Live | Fonct. | Validé | Comment tester |
+|---|---|:--:|:--:|:--:|---|
+| Cache contacts au boot | `dump_persons` | ✅ | ✅ | 🟡 | UX instantanée sur contacts connus |
+| Dernier rapport de triage *(4-onglets)* | `last_triage_report` | ✅ | ✅ | 🟡 | Card rapport dans l'empty-shell |
+| Lancer le triage | `run_triage` | ✅ | 🔄 | ⏳ | Crée une tâche ; le triage tourne via cron |
+| Scan nocturne des patterns | `run_nightly_scan` | ✅ | ✅ | 🟡 | Cron interne (feedback récurrents → Notion) |
+
+### Limitations connues / reste à faire
+
+1. **`brief_attachment`** (podcast d'une PJ seule) = stub « non wiré » alors que le token Missive **est** dispo et déjà utilisé ailleurs → implémentable vite.
+2. **Micro agent** (dock + ancienne sheet) = démo simulée, pas de vraie dictée (aucune API WebSpeech câblée).
+3. **Timeline « À venir »** = `upcoming` renvoie `[]` codé en dur ; events futurs pas branchés.
+4. **Ignorer une tâche proposée** = local seulement, pas persisté (réapparaît au reload).
+5. **Bouton NDA du footer** = câblé en JS mais absent des 2 HTML → chemin mort. NDA accessible via la sheet Signature (« Générer un NDA »).
+6. **`sign_documents` / `generate_nda`** ne signent/génèrent pas eux-mêmes : ils créent une tâche Backlog en attendant les templates Odoo Sign. Doublon de nommage avec `odoo_sign` (le vrai chemin). À clarifier dans l'UI.
+7. **Spec §11.4 mentionne DocuSign** ; l'implémentation réelle de signature est **Odoo Sign** (`odoo_sign`). §11.4 à réécrire un jour.
+8. **Secret backend mal orthographié** `ANTROPIC_API_TOKEN` (sans H) — fonctionne car cohérent, mais à corriger.
