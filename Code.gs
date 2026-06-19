@@ -66,6 +66,7 @@ function doPost(e) {
       case 'brief_podcast':              result = handleBriefPodcast_(body);          break;
       case 'add_to_watch':               result = handleAddToWatch_(body);            break;
       case 'enrich_contact':             result = handleEnrichContact_(body);         break;
+      case 'enrich_and_sync':            result = handleEnrichAndSync_(body);         break;
       case 'brief_reply':                result = handleBriefReply_(body);            break;
       case 'toggle_vip':                 result = handleToggleVip_(body);             break;
       case 'add_phone_to_notion':        result = handleAddPhoneToNotion_(body);      break;
@@ -3473,4 +3474,306 @@ function _buildInteractionPayload_(body, result, opts) {
     tier_loaded: opts.tier_loaded || 'minimal',
     human_in_loop: true,
   };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ENRICH_AND_SYNC — Pipeline complet contact entrant
+   signature Missive → Tavily → GLEIF → Claude → Folk → Notion
+   ══════════════════════════════════════════════════════════════════════════ */
+
+function handleEnrichAndSync_(body) {
+  var convId    = String(body.conversation_id || '');
+  var seedEmail = String(body.email || '').toLowerCase().trim();
+  var seedName  = String(body.name  || '').trim();
+  if (!seedEmail && !seedName) return { ok: false, error: 'email ou name requis' };
+
+  var log = [];
+
+  // ── 1. Dédoublonnage avant toute écriture ──────────────────────────────
+  var notionEx = seedEmail ? handleLookupPerson_({ email: seedEmail }) : { found: false };
+  var folkEx   = seedEmail ? handleLookupFolk_({ email: seedEmail })   : { found: false };
+  if (notionEx.found && folkEx.found) {
+    return {
+      ok: true, dedup: 'both_exist',
+      notion: { action: 'exists', notion_page_id: notionEx.notion_page_id, notion_page_url: notionEx.notion_page_url },
+      folk:   { action: 'exists', folk_url: folkEx.folk_url }
+    };
+  }
+
+  // ── 2. Parse signature Missive ─────────────────────────────────────────
+  var sig = {};
+  if (convId) {
+    try { sig = parseEmailSignature_(convId, seedEmail); log.push('sig:' + (sig.phone||sig.title||sig.company ? 'found' : 'empty')); }
+    catch (e) { log.push('sig:err'); }
+  }
+  if (sig.name && !seedName) seedName = sig.name;
+
+  // ── 3. Tavily web search ───────────────────────────────────────────────
+  var tavilyData = null;
+  try {
+    var q = [seedName, sig.company].filter(Boolean).join(' ');
+    if (q) { tavilyData = tavilySearch_(q); log.push('tavily:ok'); }
+  } catch (e) { log.push('tavily:err:' + String(e.message || e).slice(0, 60)); }
+
+  // ── 4. GLEIF (gratuit, sans clé) ──────────────────────────────────────
+  var gleif = {};
+  var coName = sig.company || (tavilyData && extractCompanyFromTavily_(tavilyData)) || '';
+  if (coName) {
+    try { gleif = gleifSearch_(coName); log.push('gleif:' + (gleif.lei ? 'found' : 'not_found')); }
+    catch (e) { log.push('gleif:skip'); }
+  }
+
+  // ── 5. Synthèse Claude ────────────────────────────────────────────────
+  var record = synthesizeContact_({ email: seedEmail, name: seedName }, sig, tavilyData, gleif);
+  record.email = record.email || seedEmail;
+  record.name  = record.name  || seedName;
+  log.push('synth:ok');
+
+  // ── 6. Folk : créer si absent ─────────────────────────────────────────
+  var folkId = null, folkUrl = null, folkAction = 'skipped';
+  if (folkEx.found) {
+    folkId = folkEx.folk_id; folkUrl = folkEx.folk_url; folkAction = 'exists';
+    log.push('folk:already_exists');
+  } else {
+    try {
+      var fc = folkApiCreate_(record);
+      folkId = fc.folk_id || null; folkUrl = fc.folk_url || null;
+      folkAction = folkId ? 'created' : 'failed';
+      log.push('folk:' + folkAction);
+    } catch (e) { log.push('folk:err:' + String(e.message || e).slice(0, 60)); folkAction = 'error'; }
+  }
+
+  // ── 7. Notion : créer ou enrichir ─────────────────────────────────────
+  var notionPageId = null, notionPageUrl = null, notionAction = 'none';
+  if (notionEx.found) {
+    notionPageId  = notionEx.notion_page_id;
+    notionPageUrl = notionEx.notion_page_url;
+    try { notionUpdatePersonEnriched_(notionPageId, record, folkId, folkUrl); notionAction = 'updated'; log.push('notion:updated'); }
+    catch (e) { log.push('notion:update_err:' + String(e.message||e).slice(0,60)); notionAction = 'update_failed'; }
+  } else {
+    try {
+      var nr = notionCreatePersonEnriched_(record, folkId, folkUrl);
+      notionPageId = nr.notion_page_id; notionPageUrl = nr.notion_page_url; notionAction = 'created';
+      log.push('notion:created');
+    } catch (e) { log.push('notion:err:' + String(e.message||e).slice(0,60)); notionAction = 'error'; }
+  }
+
+  return {
+    ok: true, record: record,
+    folk:   { action: folkAction, folk_id: folkId, folk_url: folkUrl },
+    notion: { action: notionAction, notion_page_id: notionPageId, notion_page_url: notionPageUrl },
+    log: log
+  };
+}
+
+/* ── Parse la signature du dernier mail entrant depuis Missive ──────────── */
+function parseEmailSignature_(convId, senderEmail) {
+  var out = { phone: null, title: null, company: null, website: null, linkedin: null, name: null };
+  try {
+    var resp = missiveListMessages_(convId, 5);
+    var messages = (resp.messages || []);
+    var msg = null;
+    for (var i = 0; i < messages.length; i++) {
+      var m = messages[i];
+      var fromAddr = ((m.from_field && m.from_field.address) || '').toLowerCase();
+      if (fromAddr.includes('plasticodyssey') || fromAddr.includes('benoit@')) continue;
+      if (senderEmail && fromAddr && fromAddr !== senderEmail) continue;
+      msg = m; break;
+    }
+    if (!msg) return out;
+
+    // Tente de lire le corps complet du message
+    var body = msg.preview || '';
+    try {
+      var fullMsg = missiveApi_('GET', '/messages/' + msg.id);
+      var fm = (fullMsg.messages || [])[0] || {};
+      body = fm.body || fm.preview || body;
+    } catch (_) {}
+
+    // Strip HTML
+    body = body.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ' ')
+               .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+               .replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+    // Repère le bloc signature
+    var sigText = body;
+    var markers = [/\r?\n--\s*\r?\n/, /\n_{4,}/, /\nCordialement[\s,]/, /\nBien cordialement/,
+                   /\nBest regards/i, /\nKind regards/i, /\nSent from my/i];
+    for (var d = 0; d < markers.length; d++) {
+      var idx = body.search(markers[d]);
+      if (idx > 50) { sigText = body.slice(idx); break; }
+    }
+
+    // Lignes non vides
+    var lines = sigText.split(/\r?\n/).map(function(l) { return l.trim(); })
+                       .filter(function(l) { return l.length > 0; });
+
+    // LinkedIn
+    var liMatch = sigText.match(/linkedin\.com\/in\/([a-zA-Z0-9\-_%]+)/i);
+    if (liMatch) out.linkedin = 'https://www.linkedin.com/in/' + liMatch[1];
+
+    // Téléphone (formats internationaux et français)
+    var phoneMatch = sigText.match(/(\+?[\d][\d\s\.\-\(\)]{7,17}\d)/);
+    if (phoneMatch) { var rawPhone = phoneMatch[1].replace(/[\s\.\-]/g, ''); if (rawPhone.length >= 8) out.phone = phoneMatch[1].trim(); }
+
+    // Site web (hors LinkedIn)
+    var webMatch = sigText.match(/https?:\/\/(?!(?:www\.)?linkedin)[a-zA-Z0-9\-\.]+\.[a-z]{2,}/i);
+    if (webMatch) out.website = webMatch[0].split(/[\s,<>]/)[0];
+
+    // Nom, titre, société (lignes 1-3 après le délimiteur)
+    for (var li = 0; li < Math.min(lines.length, 6); li++) {
+      var line = lines[li].replace(/^-+\s*/, '').trim();
+      if (!line || line.length < 2 || line.length > 80) continue;
+      if (/^(http|www\.|mailto:|tel:|\+|\d)/.test(line)) continue;
+      if (!out.name)    { out.name    = line; continue; }
+      if (!out.title)   { out.title   = line; continue; }
+      if (!out.company) { out.company = line; break; }
+    }
+    return out;
+  } catch (e) { return out; }
+}
+
+/* ── Tavily search (TAVILY_API_KEY in Doppler) ──────────────────────────── */
+function tavilySearch_(query) {
+  var key = getSecret_('TAVILY_API_KEY');
+  var res = UrlFetchApp.fetch('https://api.tavily.com/search', {
+    method: 'post', contentType: 'application/json',
+    payload: JSON.stringify({ api_key: key, query: query, max_results: 5,
+                              include_answer: true, search_depth: 'basic' }),
+    muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) throw new Error('Tavily ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 200));
+  return JSON.parse(res.getContentText());
+}
+
+/* ── Extrait le nom de société des résultats Tavily ────────────────────── */
+function extractCompanyFromTavily_(tavilyData) {
+  if (!tavilyData) return '';
+  var answer = String(tavilyData.answer || '');
+  // Cherche des patterns courants "travaille chez X", "CEO of X", "fondateur de X"
+  var m = answer.match(/(?:chez|at|of|pour|de|founder of|CEO of)\s+([A-Z][A-Za-z\s&\.]{2,40})/);
+  return m ? m[1].trim() : '';
+}
+
+/* ── GLEIF LEI Registry (gratuit, sans clé) ─────────────────────────────── */
+function gleifSearch_(companyName) {
+  var url = 'https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalName%5D=' +
+            encodeURIComponent(companyName) + '&page%5Bsize%5D=1';
+  var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) return {};
+  var data = JSON.parse(res.getContentText());
+  var items = (data.data || []);
+  if (!items.length) return {};
+  var attr  = (items[0].attributes && items[0].attributes.entity) || {};
+  return {
+    lei:           items[0].id,
+    official_name: (attr.legalName && attr.legalName.name) || companyName,
+    jurisdiction:  attr.jurisdiction || '',
+    status:        attr.status || ''
+  };
+}
+
+/* ── Synthèse Claude : consolide seed + sig + tavily + gleif ───────────── */
+function synthesizeContact_(seed, sig, tavilyData, gleif) {
+  var apiKey; try { apiKey = getSecret_('ANTROPIC_API_TOKEN'); } catch (e) { return { name: seed.name, email: seed.email }; }
+
+  var ctx = 'Contact seed: ' + JSON.stringify(seed) + '\n';
+  if (sig && Object.keys(sig).some(function(k){ return sig[k]; }))
+    ctx += 'Signature email: ' + JSON.stringify(sig) + '\n';
+  if (tavilyData && tavilyData.answer)
+    ctx += 'Recherche web (Tavily answer): ' + String(tavilyData.answer).slice(0, 800) + '\n';
+  if (tavilyData && tavilyData.results && tavilyData.results.length)
+    ctx += 'Résultats: ' + JSON.stringify(tavilyData.results.slice(0,3).map(function(r){
+      return { title: r.title, url: r.url, snippet: (r.content||'').slice(0,200) };
+    })) + '\n';
+  if (gleif && gleif.lei)
+    ctx += 'GLEIF: ' + JSON.stringify(gleif) + '\n';
+
+  var system = 'Tu es un assistant CRM pour Plastic Odyssey Factories (POF), entreprise qui déploie des usines de recyclage plastique. Réponds UNIQUEMENT en JSON valide, sans markdown ni commentaire.';
+  var prompt = ctx + '\nConsolide en une fiche propre. Omets les champs inconnus. Ne remplis rien si incertain.\n\n' +
+    '{"name":"...","email":"...","phone":"...","title":"...","company":"...","domain":"...","linkedin":"...","country":"...","context_note":"2-3 phrases : ce que fait la société/personne, pertinence POF (recyclage, industriel, bailleurs, franchise), signal secteur clé.","field_sources":{"phone":"sig|web|unknown","title":"sig|web|unknown","company":"sig|web|gleif|unknown"}}';
+
+  var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post', contentType: 'application/json',
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    payload: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 700, system: system,
+                              messages: [{ role: 'user', content: prompt }] }),
+    muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) return { name: seed.name, email: seed.email };
+  var data = JSON.parse(res.getContentText());
+  var textBlock = (data.content||[]).filter(function(b){return b.type==='text';})[0];
+  return parseJsonLoose_(textBlock ? textBlock.text : '') || { name: seed.name, email: seed.email };
+}
+
+/* ── Crée un contact dans Folk (API v1 directe) ─────────────────────────── */
+function folkApiCreate_(record) {
+  var token = getSecret_('FOLK_API_KEY');
+  var payload = { fullName: record.name || record.email || '' };
+  if (record.email)   payload.emails    = [{ email: record.email }];
+  if (record.phone)   payload.phones    = [{ phone: record.phone }];
+  if (record.company) payload.company   = { name: record.company };
+  if (record.title)   payload.jobTitle  = record.title;
+
+  var res = UrlFetchApp.fetch(FOLK_API_BASE + '/people', {
+    method: 'post', contentType: 'application/json',
+    headers: { 'Authorization': 'Bearer ' + token },
+    payload: JSON.stringify(payload), muteHttpExceptions: true
+  });
+  var code = res.getResponseCode();
+  if (code < 200 || code >= 300) throw new Error('Folk create ' + code + ': ' + res.getContentText().slice(0,300));
+
+  var data = JSON.parse(res.getContentText());
+  var person = (data.data && data.data.id !== undefined) ? data.data : data;
+  var rawId  = String(person.id || '').replace(/^per_/, '');
+  var grp    = (person.groups && person.groups.length) ? String(person.groups[0].id||'').replace(/^grp_/,'') : '';
+  var folkUrl = rawId ? 'https://app.folk.app/apps/contacts/network/' + FOLK_NETWORK_ID +
+                        (grp ? '/groups/' + grp : '') + '/people/' + rawId : null;
+  return { folk_id: rawId || null, folk_url: folkUrl };
+}
+
+/* ── Crée une fiche Notion avec tous les champs enrichis ────────────────── */
+function notionCreatePersonEnriched_(record, folkId, folkUrl) {
+  var dbId      = cfg_('NOTION_PERSONS_DB');
+  var emailProp = cfg_('PERSON_EMAIL_PROP') || 'E-mail';
+  if (!dbId) throw new Error('NOTION_PERSONS_DB not configured');
+
+  var props = {};
+  props['Nom']      = { title: [{ text: { content: record.name || record.email || 'Sans nom' } }] };
+  if (record.email)   props[emailProp]        = { email: record.email };
+  if (record.phone)   props['Téléphone']      = { phone_number: record.phone };
+  if (record.company) props['Société']        = { rich_text: [{ text: { content: record.company } }] };
+  if (record.domain)  props['Nom de domaine'] = { rich_text: [{ text: { content: record.domain } }] };
+  if (folkUrl)        props['Lien Folk']       = { url: folkUrl };
+  if (folkId)         props['ID folk']         = { rich_text: [{ text: { content: folkId } }] };
+  props['Type'] = { multi_select: [{ name: 'source:sidebar' }] };
+
+  var descLines = [];
+  if (record.title)        descLines.push(record.title);
+  if (record.context_note) descLines.push(record.context_note);
+  if (record.linkedin)     descLines.push('LinkedIn: ' + record.linkedin);
+  if (record.country)      descLines.push('Pays: ' + record.country);
+  if (descLines.length)    props['Description'] = { rich_text: [{ text: { content: descLines.join('\n') } }] };
+
+  var resp = notionFetch_('POST', '/pages', { parent: { database_id: dbId }, properties: props });
+  return { notion_page_id: resp.id, notion_page_url: resp.url || notionPageUrl_(resp.id) };
+}
+
+/* ── Met à jour une fiche Notion existante avec les données enrichies ───── */
+function notionUpdatePersonEnriched_(pageId, record, folkId, folkUrl) {
+  var props = {};
+  if (record.phone)   props['Téléphone']      = { phone_number: record.phone };
+  if (record.company) props['Société']        = { rich_text: [{ text: { content: record.company } }] };
+  if (record.domain)  props['Nom de domaine'] = { rich_text: [{ text: { content: record.domain } }] };
+  if (folkUrl)        props['Lien Folk']       = { url: folkUrl };
+  if (folkId)         props['ID folk']         = { rich_text: [{ text: { content: folkId } }] };
+
+  var descLines = [];
+  if (record.title)        descLines.push(record.title);
+  if (record.context_note) descLines.push(record.context_note);
+  if (record.linkedin)     descLines.push('LinkedIn: ' + record.linkedin);
+  if (record.country)      descLines.push('Pays: ' + record.country);
+  if (descLines.length)    props['Description'] = { rich_text: [{ text: { content: descLines.join('\n') } }] };
+
+  if (Object.keys(props).length) notionFetch_('PATCH', '/pages/' + pageId, { properties: props });
 }
