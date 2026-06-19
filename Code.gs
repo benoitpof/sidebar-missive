@@ -570,8 +570,8 @@ const SLACK_LEGAL_CHANNEL = '#ai-assistan-legal';
  * Connexion Odoo JSON-RPC (prod) :
  *   URL  : https://po-factories-production.odoo.com
  *   DB   : po-factories-production
- *   User : benoit+apiuser@plasticodyssey.org (res.users id 80)
- *   Key  : secret Doppler ODOO_API_KEY_APIUSER
+ *   User : benoit@plasticodyssey.org (res.users id 2)
+ *   Key  : secret Doppler ODOO_API_KEY
  *
  * Profil signataire V1 (statique) :
  *   Nom      : "Benoit BLANCHER"
@@ -590,10 +590,10 @@ function handleOdooSign_(body) {
   var today      = Utilities.formatDate(new Date(), 'Europe/Paris', 'dd/MM/yyyy');
 
   try {
-    var apiKey = getSecret_('ODOO_API_KEY_APIUSER');
+    var apiKey = getSecret_('ODOO_API_KEY');
 
     // ── 1. Authentification JSON-RPC → uid ──
-    var uid = odooRpc_('common', 'authenticate', [ODOO_DB, 'benoit+apiuser@plasticodyssey.org', apiKey, {}]);
+    var uid = odooRpc_('common', 'authenticate', [ODOO_DB, 'benoit@plasticodyssey.org', apiKey, {}]);
     if (!uid) return { success: false, error: 'Authentification Odoo échouée' };
 
     // ── 2. Trouver les sign.request.item en attente pour Benoît ──
@@ -632,9 +632,9 @@ function handleOdooSign_(body) {
       { fields: ['id', 'type_id', 'name', 'required'] }
     );
 
-    // ── 4. Charger la signature stockée du compte Benoît (id 2) ──
+    // ── 4. Charger la signature enregistrée sur le compte Benoît ──
     var users = odooCall_(uid, apiKey, 'res.users', 'read',
-      [[2]],
+      [[uid]],
       { fields: ['sign_signature', 'sign_initials'] }
     );
     var userData = users && users[0];

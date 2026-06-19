@@ -907,6 +907,14 @@ async function handleConversation(id, conversation) {
   renderTimeline();    // état vide immédiat ; les interactions arrivent après le lookup contact
   loadContent(id);
 
+  // Auto-ouvre la popup de signature Odoo dès que l'email est une demande de signature
+  if (isOdooSignRequest()) {
+    setTimeout(() => {
+      openSheet('signature');
+      showOdooSignConfirm(document.getElementById('fa-signature'));
+    }, 500);
+  }
+
   // Pré-remplit le formulaire de tâche (respecte les champs dirty)
   prefillTaskForm();
 
