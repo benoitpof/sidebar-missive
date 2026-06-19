@@ -243,7 +243,7 @@ async function lookupInNotion(p) {
 const lookupInFolk                = p => callProxy('lookup_folk',   { email: p.email, name: p.name });
 const reconcileFolk               = args => callProxy('reconcile_folk', args);
 const lookupParticipantInNotion   = p => lookupInNotion(p);
-const createPersonInNotion        = p => callProxy('create_person', { email: p.email, name: p.name });
+const createPersonInNotion        = (p, convId) => callProxy('enrich_and_sync', { email: p.email, name: p.name, conversation_id: convId || S.conversationId || '' });
 const updatePersonInstructions    = (pageId, text) => callProxy('update_person_instructions', { page_id: pageId, text });
 
 /* ════════════════════════════════════════════════════════
@@ -582,7 +582,7 @@ async function renderMain(person, notionData) {
         </div>
         <div id="fallback-actions" class="action-row">
           <button class="btn btn-primary" data-action="create-notion">
-            ${icon('plus')} Créer dans Notion
+            ${icon('sparkles')} Enrichir & Ajouter
           </button>
           <a href="https://app.folk.app/contacts" target="_blank" class="btn btn-outline">
             ${icon('external')} Chercher dans Folk
@@ -615,7 +615,7 @@ async function renderMain(person, notionData) {
         if (actions) {
           actions.innerHTML = `
             <button class="btn btn-primary btn-block" data-action="create-notion">
-              ${icon('plus')} Créer la fiche Notion
+              ${icon('sparkles')} Enrichir & Ajouter
             </button>`;
           actions.querySelector('[data-action="create-notion"]')
             .addEventListener('click', e => doCreateNotion(e, person));
@@ -725,19 +725,30 @@ async function doReconcileFolk(ev, person) {
 
 async function doCreateNotion(ev, person) {
   const btn = ev.currentTarget;
-  btn.innerHTML = `<div class="spinner"></div> Création…`;
+  btn.innerHTML = `<div class="spinner"></div> Enrichissement…`;
   btn.disabled  = true;
   const r = await createPersonInNotion(person);
   const actions = document.getElementById('fallback-actions');
   const badge   = document.getElementById('main-badge');
 
-  if (r?.success && actions && badge) {
-    const url = r.notion_page_url || notionHref(r.notion_page_id);
+  // Supporte l'ancien format {success} et le nouveau {ok, notion, folk}
+  const ok = r?.ok || r?.success;
+  const notionUrl  = r?.notion?.notion_page_url || r?.notion_page_url || (r?.notion?.notion_page_id && notionHref(r.notion?.notion_page_id)) || '';
+  const folkUrl    = r?.folk?.folk_url || '';
+  const folkAction = r?.folk?.action || '';
+
+  if (ok && actions && badge) {
+    const folkBadge = (folkAction === 'created' || folkAction === 'exists') && folkUrl
+      ? `<a href="${esc(folkUrl)}" target="_blank" class="badge badge-folk" title="Ouvrir dans Folk">
+           ${icon('check')} Folk
+           <svg class="badge-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>
+         </a>`
+      : '';
     badge.outerHTML = `
-      <a href="${esc(url)}" target="_blank" class="badge badge-found" title="Ouvrir dans Notion">
+      <a href="${esc(notionUrl)}" target="_blank" class="badge badge-found" title="Ouvrir dans Notion">
         ${icon('check')} Notion
         <svg class="badge-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>
-      </a>`;
+      </a>${folkBadge}`;
     actions.remove();
     invalidateIndex();
   } else {
