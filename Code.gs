@@ -599,7 +599,7 @@ function handleOdooSign_(body) {
     // ── 2. Trouver les sign.request.item en attente pour Benoît ──
     var items = odooCall_(uid, apiKey, 'sign.request.item', 'search_read',
       [[['signer_email', '=', 'benoit@plasticodyssey.org'], ['state', '=', 'sent']]],
-      { fields: ['id', 'sign_request_id', 'role_id'] }
+      { fields: ['id', 'sign_request_id', 'role_id', 'access_token'] }
     );
 
     // Filtrer : émetteur = Ouraye (create_uid 59), sign.request à l'état sent
@@ -657,8 +657,20 @@ function handleOdooSign_(body) {
       // Autres types (checkbox, radio…) : skippés en V1
     }
 
-    // ── 6. Appeler sign.request.item.sign() ──
-    odooCall_(uid, apiKey, 'sign.request.item', 'sign', [[itemId], payload], {});
+    // ── 6. Signer via le contrôleur web Odoo (sign() exige sudo, impossible en JSON-RPC) ──
+    var accessToken = target.item.access_token;
+    if (!accessToken) throw new Error('access_token absent sur sign.request.item ' + itemId);
+    var signUrl = ODOO_URL + '/sign/sign_request_item/sign/' + target.req.id + '/' + accessToken;
+    var signResp = UrlFetchApp.fetch(signUrl, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ jsonrpc: '2.0', method: 'call', id: 1, params: { signature: payload } }),
+      muteHttpExceptions: true,
+    });
+    var signData = JSON.parse(signResp.getContentText());
+    if (signData.error) {
+      throw new Error('Odoo Sign error: ' + JSON.stringify(signData.error.data || signData.error).slice(0, 300));
+    }
 
     return {
       success:    true,
