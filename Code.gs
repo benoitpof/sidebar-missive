@@ -602,8 +602,12 @@ function handleOdooSign_(body) {
       { fields: ['id', 'sign_request_id', 'role_id', 'access_token'] }
     );
 
-    // Filtrer : émetteur = Ouraye (create_uid 59), sign.request à l'état sent
-    var target = null;
+    if (!items.length) {
+      return { success: false, error: 'Aucune demande en attente de ta signature.' };
+    }
+
+    // Ne garder que les sign.request réellement actives (state = sent ; on écarte expired/canceled/completed)
+    var candidates = [];
     for (var i = 0; i < items.length; i++) {
       var reqId = items[i].sign_request_id && items[i].sign_request_id[0];
       if (!reqId) continue;
@@ -612,14 +616,39 @@ function handleOdooSign_(body) {
         { fields: ['id', 'reference', 'state', 'create_uid', 'template_id'] }
       );
       var req = reqs && reqs[0];
-      if (req && req.state === 'sent' && req.create_uid && req.create_uid[0] === 59) {
-        target = { item: items[i], req: req };
-        break;
+      if (req && req.state === 'sent') {
+        candidates.push({ item: items[i], req: req });
       }
     }
 
+    if (!candidates.length) {
+      return { success: false, error: 'Aucune demande active en attente de ta signature (déjà signées ou expirées).' };
+    }
+
+    // Sélection robuste : matcher sur le nom du document ouvert dans Missive.
+    // À défaut de match : un seul candidat → on le prend ; plusieurs → on refuse (jamais signer au hasard).
+    var norm = function (s) { return String(s || '').toLowerCase().replace(/\.pdf$/, '').replace(/[^a-z0-9]/g, ''); };
+    var target = null;
+    if (docName) {
+      var want = norm(docName);
+      for (var k = 0; k < candidates.length; k++) {
+        var ref = norm(candidates[k].req.reference);
+        if (ref && (ref === want || ref.indexOf(want) !== -1 || want.indexOf(ref) !== -1)) {
+          target = candidates[k];
+          break;
+        }
+      }
+    }
     if (!target) {
-      return { success: false, error: 'Aucune demande d\'Ouraye en attente de ta signature. Elle est peut-être déjà signée ou expirée.' };
+      if (candidates.length === 1) {
+        target = candidates[0];
+      } else {
+        var list = candidates.map(function (c) {
+          var sender = c.req.create_uid && c.req.create_uid[1] ? ' (de ' + c.req.create_uid[1] + ')' : '';
+          return '• ' + c.req.reference + sender;
+        }).join('\n');
+        return { success: false, error: 'Plusieurs demandes en attente, choix ambigu. Ouvre la conversation du bon document.\n' + list };
+      }
     }
 
     var itemId     = target.item.id;
