@@ -4198,3 +4198,31 @@ body.no-conversation .empty-shell { display: flex; }
   line-height: 1.4;
 }
 .odoo-result-close { margin-top: 8px; }
+
+/* Progress screen (attente signature) */
+.odoo-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px 16px 28px;
+  text-align: center;
+  min-height: 180px;
+}
+.odoo-progress-spinner { width: 24px; height: 24px; border-width: 3px; }
+.odoo-progress-doc {
+  font-family: "Poppins", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #1a1f2e);
+  word-break: break-all;
+  max-width: 100%;
+}
+.odoo-progress-step {
+  font-family: "Poppins", sans-serif;
+  font-size: 11.5px;
+  color: var(--text-secondary, #6b7280);
+  min-height: 15px;
+  transition: opacity .2s;
+}

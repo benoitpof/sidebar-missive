@@ -1355,9 +1355,7 @@ function showOdooSignConfirm(footerBtn) {
   document.getElementById('odoo-cancel').addEventListener('click', closeSheet);
 
   document.getElementById('odoo-sign-confirm').addEventListener('click', () => {
-    const confirmBtn = document.getElementById('odoo-sign-confirm');
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Signature en cours…';
+    showOdooSignProgress(docName);
 
     callProxy('odoo_sign', {
       conversation_id: S.conversationId,
@@ -1366,12 +1364,54 @@ function showOdooSignConfirm(footerBtn) {
       lieu: 'Dakar',
       nom: 'Benoit BLANCHER',
     }).then(r => {
+      stopOdooSignProgress();
       if (r && r.success === false) {
         showOdooSignResult(false, r.error || 'Erreur lors de la signature', docName, footerBtn);
       } else {
         showOdooSignResult(true, null, docName, footerBtn);
       }
-    }).catch(() => showOdooSignResult(false, 'Erreur réseau', docName, footerBtn));
+    }).catch(() => {
+      stopOdooSignProgress();
+      showOdooSignResult(false, 'Erreur réseau', docName, footerBtn);
+    });
+  });
+}
+
+// Étapes affichées pendant l'attente (purement cosmétique — la requête reste une seule
+// callProxy). Objectif : que l'attente réelle du backend (Missive → Odoo Sign) ne se
+// lise jamais comme un gel de l'UI.
+const ODOO_SIGN_PROGRESS_STEPS = [
+  { delay: 0,     text: 'Récupération du document…' },
+  { delay: 2200,  text: 'Envoi vers Odoo Sign…' },
+  { delay: 5000,  text: 'Application de la signature…' },
+  { delay: 9000,  text: 'Ça prend un peu plus longtemps que prévu, ça continue en arrière-plan…' },
+];
+let _odooSignProgressTimers = [];
+
+function stopOdooSignProgress() {
+  _odooSignProgressTimers.forEach(clearTimeout);
+  _odooSignProgressTimers = [];
+}
+
+// Affiche un écran de progression avec spinner + messages qui évoluent dans le temps,
+// pour remplacer le bouton figé sur "Signature en cours…" (perçu comme un gel).
+function showOdooSignProgress(docName) {
+  stopOdooSignProgress();
+  const body = document.getElementById('sheet-content');
+  if (!body) return;
+
+  body.innerHTML = `
+    <div class="odoo-progress" id="odoo-progress-panel">
+      <div class="spinner odoo-progress-spinner"></div>
+      <div class="odoo-progress-doc">${esc(docName)}</div>
+      <div class="odoo-progress-step" id="odoo-progress-step">${esc(ODOO_SIGN_PROGRESS_STEPS[0].text)}</div>
+    </div>`;
+
+  const stepEl = document.getElementById('odoo-progress-step');
+  ODOO_SIGN_PROGRESS_STEPS.slice(1).forEach(step => {
+    _odooSignProgressTimers.push(setTimeout(() => {
+      if (stepEl) stepEl.textContent = step.text;
+    }, step.delay));
   });
 }
 
