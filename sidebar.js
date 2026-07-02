@@ -908,6 +908,9 @@ async function handleConversation(id, conversation) {
   TimelineState.interactions = [];
   TimelineState.generating   = false;
   TimelineState._genFor      = null;
+  // Vide l'affichage tout de suite (sinon le résumé de la conv précédente
+  // reste visible jusqu'à la réponse de loadSituation).
+  renderSituationNote();
   const _ta = document.getElementById('conv-textarea');
   _ta.value = '';
   _ta.classList.remove('is-suggested');
