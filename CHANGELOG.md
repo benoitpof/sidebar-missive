@@ -2,9 +2,11 @@
 
 Versions notables. Date au format YYYY-MM-DD.
 
-## v1.18.0 — 2026-07-02 (correctifs audit — backend à redéployer V39, frontend à merger sur main)
+## v1.26.0 — 2026-07-02 (correctifs audit, rebasés sur la prod live 1.25.0)
 
-**Lot de correctifs issus de l'audit du 01/07** (cf. `AUDIT-2026-07-01.md`). Ne modifie aucun contrat d'endpoint (changements additifs). Vérifié par `node --check` ; validation réelle dans Missive à faire.
+> **Note de resynchronisation.** Au moment de l'audit, le repo était figé à 1.17.0 alors que le backend en prod (GAS `missive-sidebar-proxy`) tournait déjà en **1.25.0** : les versions 1.18 à 1.25 avaient été déployées directement sur le GAS sans jamais être commitées ici (dérive repo↔prod). Ce `Code.gs` **resynchronise le repo sur la vraie source live 1.25.0** (récupérée via `getSource`) et applique par-dessus les correctifs d'audit ci-dessous. Déployer la branche 1.18.0 telle quelle aurait fait régresser la prod de 7 versions ; elle n'a donc jamais été déployée. À partir d'ici, le repo redevient la source de vérité du backend.
+
+**Lot de correctifs issus de l'audit du 01/07** (cf. `AUDIT-2026-07-01.md`). Ne modifie aucun contrat d'endpoint (changements additifs). Vérifié par `node --check` ; déployé en prod le 02/07 (GAS version 56, hash `5de46b50`), endpoint live confirmé en 1.26.0.
 
 **Backend** (`Code.gs`).
 - `ask_agent` : accepte `body.query || body.prompt` (le dock envoie `prompt`, le back n'attendait que `query` → chaque message échouait). Le wrapper de logging **n'écrase plus** la propriété « Agent session ID » quand elle sert de clé de lookup des Conversations (elle stockait le `conversation_id` Missive ; y écrire le session id orphelinait la page — synthèse/tâches/instructions — et créait des doublons).
@@ -14,7 +16,7 @@ Versions notables. Date au format YYYY-MM-DD.
 - `update_task` patche enfin la description (propriété `Prompt`).
 - Feedback : `parent.database_id` au lieu de `data_source_id` (incompatible avec Notion-Version 2022-06-28 → 400) ; schéma du scan nocturne aligné sur la base réelle (`Titre`, `Status` type status, `Demande utilisateur`).
 - `upsert_conv` ignore le `page_id` transmis par le front et résout toujours la page côté serveur via le `conversation_id` (neutralise l'écriture croisée entre conversations).
-- Version bump 1.17.0 → 1.18.0.
+- Version bump → 1.26.0 (rebasé sur le live 1.25.0, cf. note de resynchronisation ci-dessus).
 
 **Frontend** (`sidebar.js`, `index.html`).
 - Signature Odoo : succès affiché uniquement si `success === true` (l'ancien test `success === false` affichait « Document signé » sur erreur réseau/token, sans rien signer).
