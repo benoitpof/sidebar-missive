@@ -2,6 +2,41 @@
 
 Versions notables. Date au format YYYY-MM-DD.
 
+## v1.18.0 — 2026-07-02 (correctifs audit — backend à redéployer V39, frontend à merger sur main)
+
+**Lot de correctifs issus de l'audit du 01/07** (cf. `AUDIT-2026-07-01.md`). Ne modifie aucun contrat d'endpoint (changements additifs). Vérifié par `node --check` ; validation réelle dans Missive à faire.
+
+**Backend** (`Code.gs`).
+- `ask_agent` : accepte `body.query || body.prompt` (le dock envoie `prompt`, le back n'attendait que `query` → chaque message échouait). Le wrapper de logging **n'écrase plus** la propriété « Agent session ID » quand elle sert de clé de lookup des Conversations (elle stockait le `conversation_id` Missive ; y écrire le session id orphelinait la page — synthèse/tâches/instructions — et créait des doublons).
+- `parseJsonLoose_` renvoie `null` en cas de JSON invalide (au lieu d'un objet `{error}` truthy qui passait les gardes et faisait écraser la synthèse persistée par du vide) ; `regen_situation` ne persiste plus une synthèse vide.
+- `update_situation` accepte `body.html` (converti via `htmlToText_`) en plus de `body.text` : l'édition manuelle de la synthèse n'échoue plus silencieusement.
+- `toggle_vip` résout la fiche par email/nom si `page_id` absent (étoile VIP des participants secondaires).
+- `update_task` patche enfin la description (propriété `Prompt`).
+- Feedback : `parent.database_id` au lieu de `data_source_id` (incompatible avec Notion-Version 2022-06-28 → 400) ; schéma du scan nocturne aligné sur la base réelle (`Titre`, `Status` type status, `Demande utilisateur`).
+- `upsert_conv` ignore le `page_id` transmis par le front et résout toujours la page côté serveur via le `conversation_id` (neutralise l'écriture croisée entre conversations).
+- Version bump 1.17.0 → 1.18.0.
+
+**Frontend** (`sidebar.js`, `index.html`).
+- Signature Odoo : succès affiché uniquement si `success === true` (l'ancien test `success === false` affichait « Document signé » sur erreur réseau/token, sans rien signer).
+- Popup signature auto : timer annulé au changement de conversation + re-vérification au déclenchement (ne s'ouvre plus sur la mauvaise conv).
+- Gardes anti-race après `await` dans `loadConvInstructions`, `loadTasks`, `saveConv`, et side-effects de `ask_agent` ; `TaskState` remis à zéro au changement de conversation.
+- Helper `safeHref()` (n'autorise que http(s)/mailto) appliqué aux liens sources et `notion-pill` : bloque un lien `javascript:` extrait par l'IA du contenu d'un mail (XSS).
+- Dock agent : affiche l'erreur backend au lieu d'un faux « OK, j'ai pris en compte ta demande ». `follow_source` envoie les infos de contact (sinon « contact non identifié ») et n'appelle qu'à l'activation.
+- Robustesse `prio` (tâches) + `stopOdooSignProgress()` à la fermeture du sheet.
+- Cache-busting `?v=36` → `?v=37`.
+
+## v1.17.2 — 2026-07-01
+
+**Écran de progression Odoo Sign** (frontend, PR #2). Le bouton figé « Signature en cours… » (perçu comme un gel) est remplacé par un panneau spinner + étapes temporisées (« Récupération du document… » → « Envoi vers Odoo Sign… » → « Application de la signature… ») puis un écran résultat ✅/⚠️ qui reste ouvert. Un seul `callProxy` inchangé. `sidebar.js` +48, `sidebar.css` +28.
+
+## v1.17.1 — 2026-06-19
+
+**Pipeline `enrich_and_sync`** (PR #1, `Code.gs` +303). Nouvel endpoint : dédoublonnage Notion+Folk → parse de la signature Missive → recherche web Tavily (`TAVILY_API_KEY`) → GLEIF (LEI, sans clé) → synthèse Claude → création Folk si absent → création/enrichissement de la fiche Notion. Le bouton « Créer la fiche Notion » de la sidebar appelle désormais cet endpoint à la place de `create_person` (qui reste disponible côté backend, utilisé en interne par `reconcile_folk`).
+
+## v1.17.0 — 2026-06-19
+
+**Signature Odoo Sign native** : endpoint `odoo_sign` (`handleOdooSign_`), signature directe via le contrôleur web `/sign/sign/<req>/<token>` (auth compte Benoît, PNG data URL, skip des champs template non placés). Détecté côté front quand le sujet contient « demande de signature ». Distinct de `sign_documents` (qui ne fait que filer une tâche). Validé le 19/06 : attestation STC Côme signée en conditions réelles. Deploy GAS V38, hash `65918f7d`.
+
 ## v1.16.4 — 2026-06-10
 
 **L'onglet Actions ne reste plus vide.** La synthèse exécutive et la timeline n'étaient jamais câblées bout-en-bout : `handleListTimeline_` renvoyait `situation: null` en dur (les champs `Situation *` de la base Conversations, écrits par `regen_situation`, n'étaient relus nulle part), le frontend n'envoyait jamais `contact_page_id` (le backend bailait donc immédiatement, Notes + MOUs toujours vides), aucun bouton ne permettait de générer la première synthèse, le bouton regen jetait son résultat sans re-render, et les formes backend/renderer divergeaient.
