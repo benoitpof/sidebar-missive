@@ -45,7 +45,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.17.0', agents: Object.keys(AGENTS) }; break;
+      case 'ping':                       result = { ok: true, version: '1.18.0', agents: Object.keys(AGENTS) }; break;
       case 'agent_invoke':               result = handleAgentInvoke_(body);           break;
       case 'agent_list':                 result = handleAgentList_();                 break;
       // v1.10 — Spec 2 V1 (agent sidebar + apprentissage observationnel)
@@ -106,7 +106,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.17.0', agents: Object.keys(AGENTS) });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.18.0', agents: Object.keys(AGENTS) });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -495,7 +495,9 @@ function handleSubmitFeedback_(body, kind) {
   if (body.conversation_id) properties['Context'] = { url: 'https://mail.missiveapp.com/#inbox/conversations/' + body.conversation_id };
 
   var page = notionFetch_('POST', '/pages', {
-    parent: { data_source_id: FEEDBACK_DB_ID }, properties: properties
+    // database_id (et non data_source_id) : data_source_id n'existe qu'à partir de
+    // l'API Notion 2025+, or on envoie Notion-Version 2022-06-28 → 400 sinon.
+    parent: { database_id: FEEDBACK_DB_ID }, properties: properties
   });
   return { success: true, feedback_id: page.id, url: page.url || notionPageUrl_(page.id) };
 }
@@ -537,6 +539,8 @@ function handleUpdateTask_(body) {
   if (body.deadline) properties['Due'] = { date: { start: String(body.deadline) } };
   if (body.prio)     properties['Priorité'] = { select: { name: priorityToNotion_(String(body.prio)) } };
   if (body.assignee) properties['Mode'] = { select: { name: assigneeToMode_(String(body.assignee)) } };
+  // La description d'une tâche est stockée dans la propriété 'Prompt' (cf. handleCreateTask_).
+  if (body.description) properties['Prompt'] = { rich_text: [{ text: { content: String(body.description) } }] };
   if (typeof body.done === 'boolean') {
     properties['Etat'] = { status: { name: body.done ? 'Terminé' : 'A faire' } };
     properties['Done'] = body.done ? { date: { start: new Date().toISOString().slice(0, 10) } } : { date: null };
@@ -550,6 +554,9 @@ function handleUpdateTask_(body) {
 function handleUpdateSituation_(body) {
   var convId = String(body.conversation_id || '');
   var text   = String(body.text || '').trim();
+  // Le frontend (bloc éditable de la synthèse) envoie `html`. Accepter aussi ce champ
+  // et le convertir en texte : sans ça, toute édition manuelle échouait en 'text required'.
+  if (!text && body.html) text = htmlToText_(String(body.html)).trim();
   if (!convId) return { success: false, error: 'conversation_id required' };
   if (!text)   return { success: false, error: 'text required' };
   var pageId = ensureConvPage_(convId);
@@ -1273,6 +1280,10 @@ function handleEnrichContact_(body) {
 function handleToggleVip_(body) {
   var pageId = String(body.page_id || '');
   var nowVip = !!body.vip;
+  // Les participants secondaires n'ont pas de page_id côté front : résoudre par email/nom.
+  if (!pageId && (body.email || body.contact_email || body.name)) {
+    pageId = resolveContactPageId_({ contact_email: body.email || body.contact_email, contact_name: body.name }) || '';
+  }
   if (!pageId) return { success: false, error: 'page_id required' };
 
   var page = notionFetch_('GET', '/pages/' + pageId, null);
@@ -1976,16 +1987,16 @@ function handleUpsertConv_(body) {
   if (!dbId)   throw new Error('NOTION_CONVS_DB not configured');
   if (!convId) throw new Error('missive_conversation_id required');
 
-  var pageId = String(body.page_id || '');
-
-  // Si pas de page_id passé, on cherche d'abord
-  if (!pageId) {
-    var search = notionFetch_('POST', '/databases/' + dbId + '/query', {
-      filter: { property: idProp, rich_text: { equals: convId } },
-      page_size: 1
-    });
-    if (search.results && search.results.length) pageId = search.results[0].id;
-  }
+  // On ignore volontairement body.page_id : lors d'un changement rapide de conversation,
+  // le frontend peut transmettre le page_id d'une AUTRE conversation (race), ce qui
+  // écrirait les instructions sur la mauvaise page. On résout toujours la page côté
+  // serveur à partir du conversation_id, seule source fiable.
+  var pageId = '';
+  var search = notionFetch_('POST', '/databases/' + dbId + '/query', {
+    filter: { property: idProp, rich_text: { equals: convId } },
+    page_size: 1
+  });
+  if (search.results && search.results.length) pageId = search.results[0].id;
 
   var instrPayload = { rich_text: [{ text: { content: text } }] };
 
@@ -2397,7 +2408,9 @@ function callDrafterB_(ctx, userInstructions) {
 
 function handleAskAgent_(body) {
   var convId = String(body.conversation_id || '');
-  var query  = String(body.query || '').trim();
+  // Le frontend envoie `prompt` (dock agent) ; on accepte aussi `query` (contrat back
+  // historique). Sans ce fallback, chaque message du dock échouait en 'query required'.
+  var query  = String(body.query || body.prompt || '').trim();
   if (!convId) return { reply: '', error: 'conversation_id required' };
   if (!query)  return { reply: '', error: 'query required' };
 
@@ -2565,6 +2578,13 @@ function handleRegenSituation_(body) {
   // Si return_only, ne persiste pas (utilisé en délégation ask_agent)
   if (body.return_only) return out;
 
+  // Ne jamais persister une synthèse vide : elle écraserait une synthèse existante
+  // (ex. réponse modèle non-JSON, désormais neutralisée par parseJsonLoose_ → null).
+  if (!out.summary && !out.bullets.length && !out.risks.length) {
+    out.skipped_persist = 'empty';
+    return out;
+  }
+
   // Persistance V1.10 : écriture sur les champs dédiés Situation (Spec 2 §10)
   try {
     var convPageId = ensureConvPage_(convId);
@@ -2626,7 +2646,13 @@ function parseJsonLoose_(s) {
   if (!s) return null;
   var clean = s.replace(/```json\n?|```\n?/g, '').trim();
   try { return JSON.parse(clean); }
-  catch (_e) { return { error: 'invalid json from model', raw: clean.slice(0, 300) }; }
+  catch (_e) {
+    // Retour null (et non un objet {error} truthy). Un objet truthy passait les gardes
+    // `typeof parsed === 'object'` en aval et faisait écraser une synthèse persistée par
+    // des champs vides. On loggue le brut pour investigation.
+    Logger.log('parseJsonLoose_ échec JSON : ' + clean.slice(0, 300));
+    return null;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -3291,14 +3317,15 @@ function _pushFeedbackPattern_(g, windowDays, weekStamp) {
       headers: { 'Authorization': 'Bearer ' + getSecret_('NOTION_API_TOKEN'), 'Notion-Version': NOTION_API_VERSION },
       payload: JSON.stringify({
         parent: { database_id: FEEDBACK_DB_ID },
+        // Noms/typs alignés sur le schéma réel de Feedback Atomic (title='Titre',
+        // Status=type status, Domain/Type/Severity=select ; pas de 'Source'/'Description').
         properties: {
-          'Name': { title: [{ text: { content: title.slice(0, 200) } }] },
+          'Titre': { title: [{ text: { content: title.slice(0, 200) } }] },
           'Type': { select: { name: 'improvement' } },
-          'Domain': { select: { name: 'Agent' } },
+          'Domain': { select: { name: 'Workflow' } },
           'Severity': { select: { name: 'low' } },
-          'Status': { select: { name: 'Pending' } },
-          'Source': { select: { name: 'agent' } },
-          'Description': { rich_text: [{ text: { content: description.slice(0, 1900) } }] },
+          'Status': { status: { name: 'Pas commencé' } },
+          'Demande utilisateur': { rich_text: [{ text: { content: description.slice(0, 1900) } }] },
         },
       }),
       muteHttpExceptions: true,
@@ -3414,17 +3441,26 @@ function handleAskAgentWithLogging_(body) {
     tools.push('chat_libre');
   }
 
-  // Persiste Agent session ID sur la Conv (cosmétique pour V1, utile pour le pipeline cron qui lit aussi ce champ)
+  // NE JAMAIS écrire dans la propriété qui sert de clé de lookup des Conversations.
+  // Par défaut « Agent session ID » = CONV_MISSIVE_ID_PROP, la clé où ensureConvPage_
+  // stocke le conversation_id Missive (lookup_conv, list_tasks, readConvSituation_...).
+  // Y écrire le session_id « sb_xxx » orphelinait la page (synthèse, tâches, instructions
+  // introuvables) et provoquait des doublons. Le session_id est déjà persisté dans
+  // sidebar_interactions via logSidebarInteraction_.
   try {
+    var lookupKeyProp = cfg_('CONV_MISSIVE_ID_PROP') || 'Agent session ID';
     var convPageId = ensureConvPage_(body.conversation_id);
     if (convPageId) {
+      var convProps = { 'Last agent': { rich_text: [{ text: { content: SIDEBAR_AGENT_ID + ' · ' + intentReported } }] } };
+      // On ne stocke le session_id sur la Conv que si la clé de lookup est configurée
+      // sur une AUTRE propriété (jamais sur « Agent session ID » elle-même).
+      if (lookupKeyProp !== 'Agent session ID') {
+        convProps['Agent session ID'] = { rich_text: [{ text: { content: sessionId } }] };
+      }
       UrlFetchApp.fetch('https://api.notion.com/v1/pages/' + convPageId, {
         method: 'patch', contentType: 'application/json',
         headers: { 'Authorization': 'Bearer ' + getSecret_('NOTION_API_TOKEN'), 'Notion-Version': NOTION_API_VERSION },
-        payload: JSON.stringify({ properties: {
-          'Agent session ID': { rich_text: [{ text: { content: sessionId } }] },
-          'Last agent': { rich_text: [{ text: { content: SIDEBAR_AGENT_ID + ' · ' + intentReported } }] },
-        } }),
+        payload: JSON.stringify({ properties: convProps }),
         muteHttpExceptions: true,
       });
     }
