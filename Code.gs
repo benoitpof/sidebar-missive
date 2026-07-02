@@ -45,7 +45,7 @@ function doPost(e) {
     const action = body.action;
     let result;
     switch (action) {
-      case 'ping':                       result = { ok: true, version: '1.17.0', agents: Object.keys(AGENTS) }; break;
+      case 'ping':                       result = { ok: true, version: '1.26.0', agents: Object.keys(AGENTS) }; break;
       case 'agent_invoke':               result = handleAgentInvoke_(body);           break;
       case 'agent_list':                 result = handleAgentList_();                 break;
       // v1.10 — Spec 2 V1 (agent sidebar + apprentissage observationnel)
@@ -106,7 +106,7 @@ function doPost(e) {
 }
 
 function doGet(_e) {
-  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.17.0', agents: Object.keys(AGENTS) });
+  return json_({ ok: true, service: 'missive-sidebar-proxy', version: '1.26.0', agents: Object.keys(AGENTS) });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -495,7 +495,9 @@ function handleSubmitFeedback_(body, kind) {
   if (body.conversation_id) properties['Context'] = { url: 'https://mail.missiveapp.com/#inbox/conversations/' + body.conversation_id };
 
   var page = notionFetch_('POST', '/pages', {
-    parent: { data_source_id: FEEDBACK_DB_ID }, properties: properties
+    // database_id (et non data_source_id) : data_source_id n'existe qu'à partir de
+    // l'API Notion 2025+, or on envoie Notion-Version 2022-06-28 → 400 sinon. (audit C5)
+    parent: { database_id: FEEDBACK_DB_ID }, properties: properties
   });
   return { success: true, feedback_id: page.id, url: page.url || notionPageUrl_(page.id) };
 }
@@ -537,6 +539,8 @@ function handleUpdateTask_(body) {
   if (body.deadline) properties['Due'] = { date: { start: String(body.deadline) } };
   if (body.prio)     properties['Priorité'] = { select: { name: priorityToNotion_(String(body.prio)) } };
   if (body.assignee) properties['Mode'] = { select: { name: assigneeToMode_(String(body.assignee)) } };
+  // La description d'une tâche est stockée dans la propriété 'Prompt' (cf. handleCreateTask_). (audit C5)
+  if (body.description) properties['Prompt'] = { rich_text: [{ text: { content: String(body.description) } }] };
   if (typeof body.done === 'boolean') {
     properties['Etat'] = { status: { name: body.done ? 'Terminé' : 'A faire' } };
     properties['Done'] = body.done ? { date: { start: new Date().toISOString().slice(0, 10) } } : { date: null };
@@ -550,6 +554,9 @@ function handleUpdateTask_(body) {
 function handleUpdateSituation_(body) {
   var convId = String(body.conversation_id || '');
   var text   = String(body.text || '').trim();
+  // Le frontend (bloc éditable de la synthèse) envoie `html`. Accepter aussi ce champ
+  // et le convertir en texte : sans ça, toute édition manuelle échouait en 'text required'. (audit C4)
+  if (!text && body.html) text = htmlToText_(String(body.html)).trim();
   if (!convId) return { success: false, error: 'conversation_id required' };
   if (!text)   return { success: false, error: 'text required' };
   var pageId = ensureConvPage_(convId);
@@ -607,18 +614,29 @@ function handleOdooSign_(body) {
       return { success: false, error: 'Aucune demande en attente de ta signature.' };
     }
 
-    // Ne garder que les sign.request réellement actives (state = sent ; on écarte expired/canceled/completed)
-    var candidates = [];
+    // Ne garder que les sign.request réellement actives (state = sent ; on écarte expired/canceled/completed).
+    // Un seul read() ORM sur TOUS les reqIds au lieu d'un read() par item : c'était le principal
+    // goulet du bouton "Signer maintenant" (N allers-retours Odoo séquentiels quand N documents
+    // sont en attente de signature).
+    var reqIds = [];
     for (var i = 0; i < items.length; i++) {
-      var reqId = items[i].sign_request_id && items[i].sign_request_id[0];
-      if (!reqId) continue;
+      var rid = items[i].sign_request_id && items[i].sign_request_id[0];
+      if (rid && reqIds.indexOf(rid) === -1) reqIds.push(rid);
+    }
+    var reqById = {};
+    if (reqIds.length) {
       var reqs = odooCall_(uid, apiKey, 'sign.request', 'read',
-        [[reqId]],
+        [reqIds],
         { fields: ['id', 'reference', 'state', 'create_uid', 'template_id'] }
       );
-      var req = reqs && reqs[0];
-      if (req && req.state === 'sent') {
-        candidates.push({ item: items[i], req: req });
+      for (var r = 0; r < reqs.length; r++) reqById[reqs[r].id] = reqs[r];
+    }
+    var candidates = [];
+    for (var i2 = 0; i2 < items.length; i2++) {
+      var rid2 = items[i2].sign_request_id && items[i2].sign_request_id[0];
+      var req2 = rid2 && reqById[rid2];
+      if (req2 && req2.state === 'sent') {
+        candidates.push({ item: items[i2], req: req2 });
       }
     }
 
@@ -656,18 +674,20 @@ function handleOdooSign_(body) {
     var roleId     = target.item.role_id && target.item.role_id[0];
     var templateId = target.req.template_id && target.req.template_id[0];
 
-    // ── 3. Identifier les champs du template pour ce rôle ──
+    // ── 3-4. Champs du template pour ce rôle + signature enregistrée sur le compte Benoît ──
     //   page/posX servent à écarter les champs fantômes non placés sur le PDF (page=-1).
-    var signItems = odooCall_(uid, apiKey, 'sign.item', 'search_read',
-      [[['template_id', '=', templateId], ['responsible_id', '=', roleId]]],
-      { fields: ['id', 'type_id', 'name', 'required', 'page', 'posX'] }
-    );
-
-    // ── 4. Charger la signature enregistrée sur le compte Benoît ──
-    var users = odooCall_(uid, apiKey, 'res.users', 'read',
-      [[uid]],
-      { fields: ['sign_signature', 'sign_initials'] }
-    );
+    //   Les deux lectures sont indépendantes : un seul aller-retour réseau via fetchAll
+    //   au lieu de deux appels séquentiels.
+    var batch2 = odooCallBatch_(uid, apiKey, [
+      { model: 'sign.item', method: 'search_read',
+        args: [[['template_id', '=', templateId], ['responsible_id', '=', roleId]]],
+        kwargs: { fields: ['id', 'type_id', 'name', 'required', 'page', 'posX'] } },
+      { model: 'res.users', method: 'read',
+        args: [[uid]],
+        kwargs: { fields: ['sign_signature', 'sign_initials'] } },
+    ]);
+    var signItems = batch2[0];
+    var users     = batch2[1];
     var userData = users && users[0];
     if (!userData || !userData.sign_signature) {
       return { success: false, error: 'Aucune signature enregistrée dans Odoo. Va dans Préférences > Signature pour en déposer une.' };
@@ -769,6 +789,36 @@ function odooCall_(uid, apiKey, model, method, args, kwargs) {
   ]);
 }
 
+// Exécute plusieurs execute_kw indépendants en un seul aller-retour réseau (UrlFetchApp.fetchAll)
+// au lieu d'un fetch() séquentiel par appel. calls: [{model, method, args, kwargs}, ...].
+// Retourne les résultats dans le même ordre. Lève sur la première erreur RPC rencontrée.
+function odooCallBatch_(uid, apiKey, calls) {
+  var requests = calls.map(function (c) {
+    return {
+      url: ODOO_URL + '/jsonrpc',
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({
+        jsonrpc: '2.0', method: 'call', id: 1,
+        params: {
+          service: 'object', method: 'execute_kw',
+          args: [ODOO_DB, uid, apiKey, c.model, c.method, c.args, c.kwargs || {}],
+        },
+      }),
+      muteHttpExceptions: true,
+    };
+  });
+  var responses = UrlFetchApp.fetchAll(requests);
+  return responses.map(function (resp, idx) {
+    var data = JSON.parse(resp.getContentText());
+    if (data.error) {
+      throw new Error('Odoo RPC error (' + calls[idx].model + '.' + calls[idx].method + '): ' +
+        JSON.stringify(data.error).slice(0, 300));
+    }
+    return data.result;
+  });
+}
+
 function handleSignatureAction_(body) {
   var action = String(body.sub_action || body.kind || body.sig_action || body.action || '');
   var convId = String(body.conversation_id || '');
@@ -780,7 +830,162 @@ function handleSignatureAction_(body) {
   return { success: false, error: 'unknown_signature_action: ' + action };
 }
 
-/* ─── legal_analysis : analyse via Claude + commentaire Missive + Slack si signature ─── */
+/* ─── legal_analysis : délégation au POF Agent Registry (cerveau unique) + repli inline ─── */
+
+/**
+ * REG-E (2026-06-22) : délègue l'analyse juridique de la sidebar au cerveau contrat
+ * unifié du Registry, EN INTERNE (le GAS s'appelle lui-même via invokeAgent_, aucun
+ * appel HTTP sortant). Choisit lawyer/legal-orchestrator en mode 'deep' si le document
+ * est long (revue clause-par-clause), sinon lawyer/legal-analyzer (analyse one-shot).
+ *
+ * Mappe le contrat JSON normalisé du Registry (verdict GO|SOUS_CONDITIONS|NO_GO|ESCALADE,
+ * findings 🚫|⚠️|💡, escalade...) vers le format legacy attendu par la sidebar
+ * (verdict OK|ALERT|BLOCK, score_anomalie, red_flags, points_cles, recommandation,
+ * signature_requise, juridiction_detectee).
+ *
+ * Fail-open : retourne null sur toute erreur (Registry KO, sortie inexploitable) ->
+ * l'appelant retombe sur l'ancien chemin Anthropic inline. ADDITIF, ne casse rien.
+ *
+ * Seuil 'deep' : document + contexte > 1500 caractères -> revue profonde.
+ */
+var LEGAL_ANALYSIS_DEEP_THRESHOLD = 1500;
+
+function legalAnalysisViaRegistry_(contextDoc, subject, mainName, personInstr) {
+  try {
+    var docLen = String(contextDoc || '').length;
+    var deep = docLen > LEGAL_ANALYSIS_DEEP_THRESHOLD;
+    var agentId = deep ? 'lawyer/legal-orchestrator' : 'lawyer/legal-analyzer';
+    var mode = deep ? 'deep' : 'fast';
+
+    var ctx = {
+      subject: subject || '',
+      contact: mainName ? { name: mainName } : undefined,
+      person_instructions: personInstr || '',
+      document_text: contextDoc || ''
+    };
+    var query = 'Analyse ce document juridique reçu par mail (sidebar Missive) : détecte le type, ' +
+      'confronte-le aux grilles de contrôle POF et aux positions canoniques, et rends ton avis structuré.';
+
+    var res = invokeAgent_(agentId, ctx, query, mode);
+    if (!res || res.ok !== true) {
+      Logger.log('legalAnalysisViaRegistry_ : invokeAgent ok!=true (' + agentId + ') -> repli inline');
+      return null;
+    }
+    var out = res.output;
+    if (!out || typeof out !== 'object') {
+      Logger.log('legalAnalysisViaRegistry_ : output non exploitable (' + agentId + ') -> repli inline');
+      return null;
+    }
+
+    var report = out.review === true
+      ? mapDeepReviewToLegacyReport_(out)
+      : mapAnalyzerOutputToLegacyReport_(out);
+    if (!report) {
+      Logger.log('legalAnalysisViaRegistry_ : mapping vide -> repli inline');
+      return null;
+    }
+    // Traçabilité : d'où vient le rapport (utile pour le smoke test / debug).
+    report._engine = 'registry';
+    report._agent = agentId;
+    report._mode = mode;
+    return report;
+  } catch (e) {
+    Logger.log('legalAnalysisViaRegistry_ exception -> repli inline : ' + (e && e.message));
+    return null;
+  }
+}
+
+/** Traduit un verdict normalisé Registry vers le verdict legacy OK|ALERT|BLOCK. */
+function mapVerdictToLegacy_(v) {
+  switch (String(v || '').toUpperCase()) {
+    case 'GO': return 'OK';
+    case 'SOUS_CONDITIONS': return 'ALERT';
+    case 'NO_GO': return 'BLOCK';
+    case 'ESCALADE': return 'BLOCK';
+    default: return 'ALERT'; // inconnu -> prudence
+  }
+}
+
+/** Mappe la sortie fast (lawyer/legal-analyzer, contrat LAWYER_JSON_CONTRACT) vers le format legacy sidebar. */
+function mapAnalyzerOutputToLegacyReport_(out) {
+  var findings = Array.isArray(out.findings) ? out.findings : [];
+  var redFlags = [];
+  var pointsCles = [];
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i] || {};
+    var label = (f.objet ? f.objet + ' : ' : '') + (f.detail || '');
+    label = String(label).trim();
+    if (!label) continue;
+    if (f.severite === '🚫' || f.severite === '⚠️') redFlags.push(label);
+    else pointsCles.push(label);
+  }
+  // points_cles : findings 💡 + faits saillants (les faits cadrent l'analyse pour l'humain).
+  if (Array.isArray(out.faits)) {
+    out.faits.forEach(function (x) { if (x) pointsCles.push(String(x)); });
+  }
+  var score = typeof out.score === 'number' ? out.score : 0;
+  // Contrat Registry : score 0-10. Legacy score_anomalie : 0-100.
+  var scoreAnomalie = Math.max(0, Math.min(100, Math.round(score * 10)));
+  var escaladeRequise = !!(out.escalade && out.escalade.requise);
+  var verdictLegacy = mapVerdictToLegacy_(out.verdict);
+  // Recommandation : conseils joints, sinon disclaimer.
+  var reco = Array.isArray(out.conseils) && out.conseils.length
+    ? out.conseils.join(' ')
+    : (escaladeRequise && out.escalade && out.escalade.motif ? out.escalade.motif : (out.disclaimer || '—'));
+
+  return {
+    type: out.type_objet || 'Document',
+    verdict: verdictLegacy,
+    score_anomalie: scoreAnomalie,
+    red_flags: redFlags,
+    points_cles: pointsCles,
+    recommandation: reco,
+    // signature_requise legacy = signal "à router vers signature". On le pose si avis favorable
+    // (GO) ET pas d'escalade humaine bloquante. SOUS_CONDITIONS/NO_GO/ESCALADE -> pas de signature directe.
+    signature_requise: (verdictLegacy === 'OK') && !escaladeRequise,
+    juridiction_detectee: out.juridiction_detectee || 'Inconnue',
+    escalade_humaine: escaladeRequise
+  };
+}
+
+/** Mappe la sortie deep (lawyer/legal-orchestrator, revue clause-par-clause) vers le format legacy sidebar. */
+function mapDeepReviewToLegacyReport_(out) {
+  var perQ = Array.isArray(out.par_question) ? out.par_question : [];
+  var redFlags = [];
+  var pointsCles = [];
+  for (var i = 0; i < perQ.length; i++) {
+    var q = perQ[i] || {};
+    var fs = Array.isArray(q.findings) ? q.findings : [];
+    for (var j = 0; j < fs.length; j++) {
+      var f = fs[j] || {};
+      var label = (f.objet ? f.objet + ' : ' : '') + (f.detail || '');
+      label = String(label).trim();
+      if (!label) continue;
+      if (f.severite === '🚫' || f.severite === '⚠️') redFlags.push(label);
+      else pointsCles.push(label);
+    }
+    // Si une question n'a pas de findings, on garde sa synthèse comme point clé.
+    if (!fs.length && q.question) pointsCles.push(String(q.question) + ' (verdict : ' + (q.verdict || '?') + ')');
+  }
+  var verdictLegacy = mapVerdictToLegacy_(out.verdict_global);
+  var escaladeRequise = !!(out.escalade && out.escalade.requise);
+  var reco = Array.isArray(out.conseils) && out.conseils.length
+    ? out.conseils.join(' ')
+    : (escaladeRequise && out.escalade && out.escalade.motif ? out.escalade.motif : (out.disclaimer || '—'));
+  // Score legacy approximé depuis le verdict global (la revue deep ne porte pas un score 0-10 unique).
+  var scoreMap = { 'OK': 0, 'ALERT': 50, 'BLOCK': 90 };
+  return {
+    type: 'Document (revue clause-par-clause)',
+    verdict: verdictLegacy,
+    score_anomalie: scoreMap[verdictLegacy] != null ? scoreMap[verdictLegacy] : 50,
+    red_flags: redFlags,
+    points_cles: pointsCles,
+    recommandation: reco + (out.partial ? ' [Revue partielle : ' + (out.partial_reason || '') + ']' : ''),
+    signature_requise: (verdictLegacy === 'OK') && !escaladeRequise,
+    juridiction_detectee: 'Inconnue',
+    escalade_humaine: escaladeRequise
+  };
+}
 
 function handleLegalAnalysis_(body) {
   var convId = String(body.conversation_id || '');
@@ -789,30 +994,57 @@ function handleLegalAnalysis_(body) {
   var personInstr = String(body.person_instructions || '');
 
   // 1. Extraire le contenu pertinent depuis Missive API (PJ si fournies, sinon body du dernier message)
+  // GARDE-FOU (incident smoke-regE-cible1, 2026-06-22) : une analyse juridique ne se lance JAMAIS
+  // sans document réellement récupéré. Un échec d'accès (id non-UUID, conversation inexistante,
+  // token KO) ou une conversation vide doit court-circuiter ICI — sans verdict, sans commentaire
+  // Missive, sans alerte Slack. Sinon une panne technique se déguise en BLOCK juridique.
   var contextDoc = '';
   var attachmentIds = body.attachment_ids || [];
   var docTitle = '(document Missive)';
-  try {
-    var msgs = missiveListMessages_(convId, 5);
-    var lastMsg = (msgs.messages || [])[0] || null;
-    if (lastMsg) {
-      contextDoc += 'Message expéditeur : ' + ((lastMsg.from_field && lastMsg.from_field.name) || '') + '\n';
-      contextDoc += 'Date : ' + (lastMsg.delivered_at || '') + '\n';
-      contextDoc += 'Subject : ' + (lastMsg.subject || subject) + '\n\n';
-      var bodyText = lastMsg.body || lastMsg.preview || '';
-      contextDoc += 'Corps du dernier message :\n' + String(bodyText).slice(0, 4000) + '\n';
-      var atts = lastMsg.attachments || [];
-      if (atts.length) {
-        contextDoc += '\nPièces jointes détectées (' + atts.length + ') :\n';
-        atts.forEach(function (a) { contextDoc += '  - ' + (a.filename || a.name || a.id) + ' (' + (a.media_type || '') + ')\n'; });
-        docTitle = atts[0].filename || docTitle;
-      }
-    }
-  } catch (e) {
-    contextDoc = '[Missive API indisponible : ' + e.message + ']\n\nAnalyse basée sur les méta-données fournies par la sidebar.';
+
+  var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(convId)) {
+    return { success: false, error: 'invalid_conversation_id', conversation_id: convId,
+             message: 'conversation_id doit être un UUID Missive valide. Aucune analyse lancée.' };
   }
 
-  // 2. Analyse via Claude Sonnet — classification + verdict
+  var msgs;
+  try {
+    msgs = missiveListMessages_(convId, 5);
+  } catch (e) {
+    return { success: false, error: 'missive_fetch_failed', detail: e.message, conversation_id: convId,
+             message: 'Conversation Missive inaccessible. Aucune analyse lancée, aucune alerte envoyée.' };
+  }
+  var lastMsg = (msgs.messages || [])[0] || null;
+  var bodyText = lastMsg ? (lastMsg.body || lastMsg.preview || '') : '';
+  var atts = (lastMsg && lastMsg.attachments) || [];
+  if (!lastMsg || (!String(bodyText).trim() && !atts.length)) {
+    return { success: false, error: 'no_document_content', conversation_id: convId,
+             message: 'Aucun contenu de document trouvé dans la conversation. Aucune analyse lancée.' };
+  }
+
+  contextDoc += 'Message expéditeur : ' + ((lastMsg.from_field && lastMsg.from_field.name) || '') + '\n';
+  contextDoc += 'Date : ' + (lastMsg.delivered_at || '') + '\n';
+  contextDoc += 'Subject : ' + (lastMsg.subject || subject) + '\n\n';
+  contextDoc += 'Corps du dernier message :\n' + String(bodyText).slice(0, 4000) + '\n';
+  if (atts.length) {
+    contextDoc += '\nPièces jointes détectées (' + atts.length + ') :\n';
+    atts.forEach(function (a) { contextDoc += '  - ' + (a.filename || a.name || a.id) + ' (' + (a.media_type || '') + ')\n'; });
+    docTitle = atts[0].filename || docTitle;
+  }
+
+  // 2. Analyse : délégation au cerveau unique (POF Agent Registry) en priorité,
+  //    repli sur l'ancien chemin Anthropic inline si le Registry échoue.
+  var report = null;
+  var analysisEngine = 'inline';
+  var registryReport = legalAnalysisViaRegistry_(contextDoc, subject, mainName, personInstr);
+  if (registryReport) {
+    report = registryReport;
+    analysisEngine = 'registry';
+  }
+
+  if (!report) {
+  // 2bis. REPLI — Analyse via Claude Sonnet inline (ancien chemin, schéma legacy)
   var apiKey = getSecret_('ANTROPIC_API_TOKEN');
   var system = 'Tu es un assistant juridique pour Plastic Odyssey Factories (POF, SAS française). ' +
     'Tu analyses un document juridique extrait d\'un mail Missive et tu produis un rapport STRICT JSON : ' +
@@ -849,8 +1081,9 @@ function handleLegalAnalysis_(body) {
   }
   var anaData = JSON.parse(anaRes.getContentText());
   var anaTextBlock = (anaData.content || []).filter(function (b) { return b.type === 'text'; })[0];
-  var report = parseJsonLoose_(anaTextBlock ? anaTextBlock.text : '');
+  report = parseJsonLoose_(anaTextBlock ? anaTextBlock.text : '');
   if (!report) return { success: false, error: 'invalid_analysis_json' };
+  } // fin du repli inline (if (!report))
 
   // 3. Format du commentaire Missive
   var verdictIcon = report.verdict === 'OK' ? '✅' : (report.verdict === 'BLOCK' ? '🚫' : '⚠️');
@@ -896,6 +1129,7 @@ function handleLegalAnalysis_(body) {
   return {
     success: true,
     action: 'legal_analysis',
+    engine: analysisEngine, // 'registry' (cerveau unique) ou 'inline' (repli)
     report: report,
     comment: commentResult,
     slack: slackResult
@@ -1273,6 +1507,10 @@ function handleEnrichContact_(body) {
 function handleToggleVip_(body) {
   var pageId = String(body.page_id || '');
   var nowVip = !!body.vip;
+  // Les participants secondaires n'ont pas de page_id côté front : résoudre par email/nom. (audit C4)
+  if (!pageId && (body.email || body.contact_email || body.name)) {
+    pageId = resolveContactPageId_({ contact_email: body.email || body.contact_email, contact_name: body.name }) || '';
+  }
   if (!pageId) return { success: false, error: 'page_id required' };
 
   var page = notionFetch_('GET', '/pages/' + pageId, null);
@@ -1976,16 +2214,16 @@ function handleUpsertConv_(body) {
   if (!dbId)   throw new Error('NOTION_CONVS_DB not configured');
   if (!convId) throw new Error('missive_conversation_id required');
 
-  var pageId = String(body.page_id || '');
-
-  // Si pas de page_id passé, on cherche d'abord
-  if (!pageId) {
-    var search = notionFetch_('POST', '/databases/' + dbId + '/query', {
-      filter: { property: idProp, rich_text: { equals: convId } },
-      page_size: 1
-    });
-    if (search.results && search.results.length) pageId = search.results[0].id;
-  }
+  // On ignore volontairement body.page_id : lors d'un changement rapide de conversation,
+  // le frontend peut transmettre le page_id d'une AUTRE conversation (race), ce qui
+  // écrirait les instructions sur la mauvaise page. On résout toujours la page côté
+  // serveur à partir du conversation_id, seule source fiable. (audit C6)
+  var pageId = '';
+  var search = notionFetch_('POST', '/databases/' + dbId + '/query', {
+    filter: { property: idProp, rich_text: { equals: convId } },
+    page_size: 1
+  });
+  if (search.results && search.results.length) pageId = search.results[0].id;
 
   var instrPayload = { rich_text: [{ text: { content: text } }] };
 
@@ -2397,7 +2635,9 @@ function callDrafterB_(ctx, userInstructions) {
 
 function handleAskAgent_(body) {
   var convId = String(body.conversation_id || '');
-  var query  = String(body.query || '').trim();
+  // Le frontend envoie `prompt` (dock agent) ; on accepte aussi `query` (contrat back
+  // historique). Sans ce fallback, chaque message du dock échouait en 'query required'. (audit C1)
+  var query  = String(body.query || body.prompt || '').trim();
   if (!convId) return { reply: '', error: 'conversation_id required' };
   if (!query)  return { reply: '', error: 'query required' };
 
@@ -2565,6 +2805,13 @@ function handleRegenSituation_(body) {
   // Si return_only, ne persiste pas (utilisé en délégation ask_agent)
   if (body.return_only) return out;
 
+  // Ne jamais persister une synthèse vide : elle écraserait une synthèse existante
+  // (ex. réponse modèle non-JSON, désormais neutralisée par parseJsonLoose_ → null). (audit C7)
+  if (!out.summary && !out.bullets.length && !out.risks.length) {
+    out.skipped_persist = 'empty';
+    return out;
+  }
+
   // Persistance V1.10 : écriture sur les champs dédiés Situation (Spec 2 §10)
   try {
     var convPageId = ensureConvPage_(convId);
@@ -2626,7 +2873,13 @@ function parseJsonLoose_(s) {
   if (!s) return null;
   var clean = s.replace(/```json\n?|```\n?/g, '').trim();
   try { return JSON.parse(clean); }
-  catch (_e) { return { error: 'invalid json from model', raw: clean.slice(0, 300) }; }
+  catch (_e) {
+    // Retour null (et non un objet {error} truthy). Un objet truthy passait les gardes
+    // `typeof parsed === 'object'` en aval et faisait écraser une synthèse persistée par
+    // des champs vides. On loggue le brut pour investigation. (audit C7)
+    Logger.log('parseJsonLoose_ échec JSON : ' + clean.slice(0, 300));
+    return null;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -2639,6 +2892,23 @@ function parseJsonLoose_(s) {
      POST /exec  { action: "agent_invoke", token, agent, query, context?, mode? }
      POST /exec  { action: "agent_list", token }
    ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Contrat JSON normalisé partagé par les agents lawyer/* v2 (config Notion).
+   Réf : https://www.notion.so/387c2ce245e881a59e6ffe0f1e4ffbf0 */
+const LAWYER_JSON_CONTRACT =
+  'SORTIE OBLIGATOIRE : un seul objet JSON STRICT, sans markdown autour, sans texte avant ni apres. Schema : ' +
+  '{"agent":"<id>","verdict":"GO|SOUS_CONDITIONS|NO_GO|ESCALADE","score":0,' +
+  '"type_objet":"NDA|MOU|pacte|contrat de travail|corporate|contrat de marque|structure|norme|fiscal|question",' +
+  '"conseils":["..."],' +
+  '"findings":[{"objet":"...","severite":"🚫|⚠️|💡","fait_ou_hypothese":"FAIT|HYPOTHESE","detail":"...","source_ref":"id + date"}],' +
+  '"faits":["..."],"hypotheses":["..."],' +
+  '"sources":[{"ref":"...","date_donnee":"YYYY-MM-DD","verifiee":true}],' +
+  '"escalade":{"requise":false,"motif":"","cible":"juriste humain"},' +
+  '"disclaimer":"Avis assiste par IA. Ne certifie pas, ne remplace pas un avis juridique."}. ' +
+  'Score depuis findings : >=3 🚫 -> 10 ; 2 🚫 -> 8 ; 1 🚫 -> 7 ; 0 🚫 et >=2 ⚠️ -> 5 ; 0 🚫 et 1 ⚠️ -> 4 ; sinon 0. ' +
+  'Verdict : 0-3 GO ; 4-6 SOUS_CONDITIONS ; 7-8 NO_GO ; 9-10 NO_GO + escalade. ' +
+  'Separe toujours FAIT et HYPOTHESE. Source et date chaque donnee. Aucune affirmation de droit positif sans source primaire datee. ' +
+  'Tu juges et tu conseilles ; tu ne certifies pas, ne rediges pas de substance legale, ne remplaces jamais un juriste. Reponds en francais.';
 
 const AGENTS = {
 
@@ -2746,27 +3016,40 @@ const AGENTS = {
 
   'lawyer/legal-analyzer': {
     fn: 'lawyer',
-    role: "Analyse d'un document juridique (NDA / contrat / MOU / pacte)",
+    role: "Cerveau contrat unifié : analyse d'un document juridique (NDA / contrat de travail / corporate / MOU / pacte / marque) contre les grilles de contrôle POF",
     model: ANTHROPIC_MODEL,
-    max_tokens: 1500,
-    system: 'Tu es un assistant juridique pour Plastic Odyssey Factories (POF, SAS française). ' +
-      "Tu analyses un document juridique extrait d'un mail Missive et tu produis un rapport STRICT JSON : " +
-      '{"type": "NDA|Contrat de travail|Contrat corporate|MOU|Pacte d\'associés|Autre", ' +
-      '"verdict": "OK|ALERT|BLOCK", ' +
-      '"score_anomalie": 0-100, ' +
-      '"red_flags": ["..."], ' +
-      '"points_cles": ["..."], ' +
-      '"recommandation": "...", ' +
-      '"signature_requise": boolean, ' +
-      '"juridiction_detectee": "FR|SN|EN|Autre|Inconnue"}. ' +
-      'OK = peut être signé tel quel par Benoit. ALERT = points à vérifier avant signature. BLOCK = anomalies critiques, ne pas signer. ' +
-      'Score anomalie : 0 = standard POF, 100 = totalement non conforme. ' +
-      'Tu réponds en français, sans markdown autour du JSON. ' +
-      "Tu te réfères aux 9 KB de contrôle POF documentées dans Gestion documentaire et aux Positions juridiques canoniques POF.",
-    permissions: { post_missive_comment: true, send_slack: true, write_notion: true },
+    max_tokens: 6000,
     output_format: 'json',
+    // PORT MOTEUR v3 (2026-06-22) : legal-analyzer rejoint le standard lawyer/* v2.
+    // - deterministic:true -> injection KB runtime (getKbContent_) + scoring/verdict déterministe (applyDeterministicVerdict_)
+    // - contrat de sortie normalisé LAWYER_JSON_CONTRACT (findings 🚫/⚠️/💡, faits/hypotheses, sources, escalade, disclaimer)
+    // L'ancien schéma OK|ALERT|BLOCK + score_anomalie/red_flags/points_cles est abandonné ICI.
+    // Le handler legacy handleLegalAnalysis_ (action 'legal_analysis') n'invoque PAS cet agent :
+    // il porte sa propre requête Anthropic + son propre parsing de l'ancien schéma -> non régressé.
+    system: 'Tu es lawyer/legal-analyzer, le cerveau contrat unifié de Plastic Odyssey Factories (POF, SAS française). ' +
+      "Tu analyses un document juridique (NDA, contrat de travail, contrat corporate, MOU, pacte, contrat de marque, autre) extrait d'un mail ou fourni en contexte, et tu produis un avis structuré. " +
+      'Méthode : détecte le type d\'objet, puis confronte le document à la grille de contrôle POF correspondante injectée dans SOURCES DE FOND POF (NDA, contrat de travail, corporate, MOU, pacte, compliance, contrat de marque, for/non-profit) et aux Positions juridiques canoniques POF. ' +
+      'Un finding par écart vs la grille ou les positions canoniques, avec source_ref citant la grille heurtée (nom + id). Sévérité : 🚫 clause inacceptable / rédhibitoire ; ⚠️ à renégocier ou vérifier avant signature ; 💡 amélioration ou point d\'attention mineur. ' +
+      'Sépare strictement FAIT (présent dans le document ou la grille) et HYPOTHESE (déduction). Aucune affirmation de droit positif sans source. Si une grille pertinente est absente des sources injectées, marque-le en HYPOTHESE et escalade. ' +
+      'Escalade : tout document de type pacte (associés / actionnaires) ou contrat de marque PO×POF -> escalade humaine requise, jamais de GO autonome (forçage déterministe côté serveur). ' +
+      LAWYER_JSON_CONTRACT,
+    permissions: { post_missive_comment: true, send_slack: true, write_notion: true },
     slack_channel: '#ai-assistan-legal',
-    kb_pages: ['https://www.notion.so/352c2ce245e880d9ad49ea835e83afe0', 'https://www.notion.so/372c2ce245e881bab739f5218d2df3ff'],
+    deterministic: true,
+    // Pack grilles de contrôle (contenu réel sur les pages Templates 352c, atteintes par ID direct ;
+    // les stubs 382c ne portent qu'un pointeur "Source:" textuel non résoluble par extractNotionPointer_)
+    // + Positions juridiques canoniques POF.
+    kb_pages: [
+      '372c2ce245e881bab739f5218d2df3ff', // Positions juridiques canoniques POF
+      '352c2ce245e88188ada2fc7fbf9ce98b', // [Contrôle] NDA
+      '352c2ce245e881219299dcac498c87c9', // [Contrôle] Contrat de travail
+      '352c2ce245e881d5b2bccdc6fd1d1264', // [Contrôle] MOU
+      '352c2ce245e881c3a486d1ce37a85791', // [Contrôle] Contrat corporate
+      '352c2ce245e881f39a11cdf33966b2e9', // [Contrôle] Pacte d'associés
+      '352c2ce245e881868d32ec6520bf2eac', // [Contrôle] Compliance et éthique POF
+      '352c2ce245e881c088ceed4b003dea15', // [Contrôle] Contrat de marque PO×POF
+      '352c2ce245e881a39916e9fc9e3433e9'  // [Contrôle] Spécificités for-profit / non-profit
+    ],
   },
 
   'lawyer/nda-expert': {
@@ -2850,6 +3133,130 @@ const AGENTS = {
       "Tu réponds en français, factuel et précis. Pas d'em-dashes, pas de filler.",
     permissions: { write_notion: true },
   },
+
+  /* ──────────────── lawyer/ v2 (config Notion runtime, AVIS SEULEMENT) ────────────────
+     Ajout additif POF Agent Registry. system inline = repli ; quand notion_config_id
+     est présent, le system effectif est lu en live sur la page Notion (cache 1h).
+     permissions toutes false : zéro effet de bord pour cette première mise en prod. */
+
+  'lawyer/coherence-gouvernance': {
+    fn: 'lawyer',
+    role: 'Vérifie la non-contradiction d\'un contrat/clause/structure avec le socle de gouvernance POF',
+    model: ANTHROPIC_MODEL,
+    max_tokens: 6000,
+    output_format: 'json',
+    system: 'Tu es lawyer/coherence-gouvernance, gardien de cohérence de gouvernance pour Plastic Odyssey Factories (POF, SAS française). ' +
+      'Ta mission : vérifier qu\'un contrat, une clause ou une structure ne CONTREDIT pas le socle de gouvernance POF existant. Tu ne juges pas le droit dans l\'absolu, tu juges la non-contradiction avec nos engagements. ' +
+      'Pour chaque élément : compatible avec le pacte d\'associés ? avec le contrat de marque PO×POF ? avec les statuts ? avec les positions canoniques ? avec les contrats actifs ? Un finding par conflit, avec citation de la source heurtée. ' +
+      'Sources lues par ID (jamais de mémoire) : Positions juridiques canoniques POF 372c2ce2-45e8-81ba-b739-f5218d2df3ff ; Pacte d\'associés 352c2ce2-45e8-81f3-9a11-cdf33966b2e9 ; Contrat de marque PO×POF 352c2ce2-45e8-81c0-88ce-ed4b003dea15 ; Inventaire MOUs actifs (data source) db667ae8-96a6-4e98-96be-306ab6a762d4 ; Statuts POF (page de fond, si indisponible -> finding HYPOTHESE + escalade). ' +
+      'Connecteurs : Notion API (lecture sources), Pappers.fr (entités FR : Kbis, bénéficiaires effectifs). ' +
+      'Escalade dure : tout ce qui touche le contrat de marque -> escalade requise, cible "Benoît + Simon (PO)", jamais de GO autonome ; conflit avec une clause du pacte (préemption, agrément, tag/drag-along, unanimité) -> NO_GO + escalade ; statuts indisponibles -> HYPOTHESE + escalade. ' +
+      LAWYER_JSON_CONTRACT,
+    permissions: { post_missive_comment: false, send_slack: false, write_notion: false },
+    slack_channel: '#ai-assistan-legal',
+    notion_config_id: '387c2ce245e881b7bb06ce202ed594e6',
+    deterministic: true,
+    country_kb: true, // ADDITIF v1.25.0 : injecte les champs réglementaires de la fiche pays en contexte
+    kb_pages: ['372c2ce245e881bab739f5218d2df3ff','352c2ce245e881f39a11cdf33966b2e9','352c2ce245e881c088ceed4b003dea15','387c2ce245e8816bb010d9665af20a3f'],
+  },
+
+  'lawyer/synthese': {
+    fn: 'lawyer',
+    role: 'Réconcilie deux avis indépendants sur un sujet critique et tranche les désaccords',
+    model: ANTHROPIC_MODEL,
+    max_tokens: 6000,
+    output_format: 'json',
+    system: 'Tu es lawyer/synthese, agent de fiabilisation pour Plastic Odyssey Factories. Tu réconcilies deux avis INDÉPENDANTS produits sur un sujet critique et tu tranches les désaccords. Tu n\'apportes aucun savoir métier propre : tu arbitres. ' +
+      'Entrée : deux objets JSON normalisés issus de deux agents à perspectives différentes (A = défense des intérêts POF ; B = faisabilité / contrepartie, anti sur-restriction). ' +
+      'Logique : findings concordants -> consolidés dans le verdict ; désaccord sur un finding -> ce point passe SOUS_CONDITIONS + escalade, jamais de désaccord masqué ; verdict global = le plus sévère des deux, sauf si la divergence elle-même justifie l\'escalade. ' +
+      'Sortie : un seul objet JSON normalisé consolidé. Liste explicitement chaque point de divergence et la décision dans conseils[] (préfixe "DÉSACCORD ARBITRÉ : "). ' +
+      'Tu n\'es activé qu\'en criticité haute. ' +
+      LAWYER_JSON_CONTRACT,
+    permissions: { post_missive_comment: false, send_slack: false, write_notion: false },
+    slack_channel: '#ai-assistan-legal',
+    notion_config_id: '387c2ce245e8813ead1bf005d1977ee0',
+    deterministic: true,
+    kb_pages: [],
+  },
+
+  'lawyer/structure-expert': {
+    fn: 'lawyer',
+    role: 'Expert structures for-profit / non-profit et montages hybrides (conformité en amont)',
+    model: ANTHROPIC_MODEL,
+    max_tokens: 6000,
+    output_format: 'json',
+    system: 'Tu es lawyer/structure-expert pour Plastic Odyssey Factories. Tu es expert structures for-profit / non-profit et montages hybrides (fonds de dotation, association, fondation, rescrit fiscal, lucrativité) en droit FR et dans les pays d\'opération. Tu agis EN AMONT, sur le design structurel, distinct de l\'analyse de contrat et du KYC. ' +
+      'Sources de fond par ID : grille [Contrôle] Spécificités for/non-profit 382c2ce2-45e8-81f6-8a77-f9dd8496f4bb ; Positions canoniques POF 372c2ce2-45e8-81ba-b739-f5218d2df3ff ; DB Pays 2a6c2ce2-45e8-8057-a366-000b0db2ffb9. Cadrage juridique 2d9c2ce2-45e8-80f6-949b-c5177fa281e9 est PÉRIMÉ : ne l\'utilise pas sans requalification (sinon finding HYPOTHESE + escalade). ' +
+      'Connecteurs : Légifrance / BOFiP (droit FR non-profit), UNCTAD Investment Laws Navigator, OHADA (17 pays), Pappers.fr. ' +
+      'Sortie : avis de conformité + distinction fait vs hypothèse par pays et type de structure. Escalade systématique sur l\'incertitude. Tu ne valides jamais seul une structure : tu prépares, l\'humain tranche. ' +
+      LAWYER_JSON_CONTRACT,
+    permissions: { post_missive_comment: false, send_slack: false, write_notion: false },
+    slack_channel: '#ai-assistan-legal',
+    notion_config_id: '387c2ce245e881be929dd60ba1e78a93',
+    deterministic: true,
+    country_kb: true, // ADDITIF v1.25.0 : injecte les champs réglementaires de la fiche pays en contexte
+    kb_pages: ['382c2ce245e881f68a77f9dd8496f4bb','2d9c2ce245e880f6949bc5177fa281e9','372c2ce245e881bab739f5218d2df3ff'],
+  },
+
+  'lawyer/tax-expert': {
+    fn: 'lawyer',
+    role: 'Expert fiscalité et structuration internationale (conventions, douanes, IS, BEPS)',
+    model: ANTHROPIC_MODEL,
+    max_tokens: 6000,
+    output_format: 'json',
+    system: 'Tu es lawyer/tax-expert pour Plastic Odyssey Factories. Tu es expert fiscalité et structuration internationale : conventions fiscales, accords douaniers, IS, substance réelle / BEPS, climat des affaires. Tu conseilles et tu challenges (ex. convention Sénégal-Maurice dénoncée, substance requise depuis 2019). ' +
+      'Règle absolue : vérifie le statut "en vigueur / dénoncée" avant tout usage d\'une convention ; tout chiffre est daté et sourcé ; séparation stricte FAIT / HYPOTHESE ; escalade par défaut sur toute décision de structuration. ' +
+      'Sources de fond par ID : grille [Contrôle] Fiscalité internationale (à créer, si absente -> HYPOTHESE) ; DB Pays 2a6c2ce2-45e8-8057-a366-000b0db2ffb9 ; doc POF Suivi_dispositifs_fiscaux_POFSN_v2 (dispositifs Sénégal). ' +
+      'Connecteurs : PwC Worldwide Tax Summaries, OECD CIT, Tax Foundation, Trading Economics, KPMG / Deloitte DITS (recoupement), UNCTAD Investment Laws, APIX Sénégal. ' +
+      'Sortie : avis structuration + risques fiscaux, statut de chaque source (en vigueur, date). ' +
+      LAWYER_JSON_CONTRACT,
+    permissions: { post_missive_comment: false, send_slack: false, write_notion: false },
+    slack_channel: '#ai-assistan-legal',
+    notion_config_id: '387c2ce245e881178122e96d085469ca',
+    deterministic: true,
+    country_kb: true, // ADDITIF v1.25.0 : injecte les champs réglementaires de la fiche pays en contexte
+    kb_pages: ['387c2ce245e881efaa0ffd6ca1d8b1c6'],
+  },
+
+  'lawyer/norms-expert': {
+    fn: 'lawyer',
+    role: 'Consultant normes et conformité organisationnelle (ISO, donneurs d\'ordre)',
+    model: ANTHROPIC_MODEL,
+    max_tokens: 6000,
+    output_format: 'json',
+    system: 'Tu es lawyer/norms-expert pour Plastic Odyssey Factories. Tu es consultant normes et conformité organisationnelle. Tu fais passer un process, un produit ou un workflow au crible des normes (ISO 9001/14001/45001/27001) et des bonnes pratiques POF, pour contracter avec des donneurs d\'ordre (Eiffage, AGL, Damen). Tu es conversationnel, pas un scanner statique : grille adaptative selon le type d\'objet (on n\'applique pas la sécurité au travail à un script). ' +
+      'Tu es complémentaire de la skill security-scanner (PII/secrets) : tu peux recommander "lance le security-scanner" comme quick-win, sans la remplacer. ' +
+      'Sources de fond par ID : grille [Contrôle] Normes ISO & conformité orga (à créer, si absente -> HYPOTHESE) ; DB Pays 2a6c2ce2-45e8-8057-a366-000b0db2ffb9 (normes nationales applicables). ' +
+      'Connecteurs : ISO OBP, ARSO (normes africaines harmonisées), ASTM, CEN/EN, BIS (Inde), BSN/SNI (Indonésie), SON/SONCAP (Nigeria), ePing (veille TBT OMC). ' +
+      'Sortie : 3 à 5 quick-wins priorisés par impact × effort dans conseils[]. ' +
+      LAWYER_JSON_CONTRACT,
+    permissions: { post_missive_comment: false, send_slack: false, write_notion: false },
+    slack_channel: '#ai-assistan-legal',
+    notion_config_id: '387c2ce245e881d38090f09dc05e3413',
+    deterministic: true,
+    kb_pages: ['387c2ce245e881609250d3d5520ee16d'],
+  },
+
+  'lawyer/legal-generic': {
+    fn: 'lawyer',
+    role: 'Droit général multi-pays sans grille fixe (préparateur de dossier sourcé)',
+    model: ANTHROPIC_MODEL,
+    max_tokens: 6000,
+    output_format: 'json',
+    system: 'Tu es lawyer/legal-generic pour Plastic Odyssey Factories. Tu traites le droit général multi-pays, sans grille fixe. Tu es un préparateur de dossier juridique sourcé pour les questions hors périmètre des experts dédiés, appelé en complément ou en dernier recours. ' +
+      'Posture renforcée anti-hallucination : aucune affirmation de droit positif (taux, convention, obligation) sans source primaire datée (URL + date de consultation) ; trois blocs distincts JAMAIS mélangés -> FAITS SOURCÉS (faits[]) / HYPOTHESES DE TRAVAIL (hypotheses[]) / À VÉRIFIER PAR JURISTE (escalade + conseils[]) ; pas de source primaire -> donnée marquée "non vérifié", jamais présentée comme fait ; escalade par défaut. ' +
+      'Sources de fond par ID : DB Pays 2a6c2ce2-45e8-8057-a366-000b0db2ffb9 (fiches validées). ' +
+      'Connecteurs recherche live : Legal Data Hunter (REST primaire, 35M docs / 160 juridictions), repli Tavily web. Toute donnée live est marquée "à vérifier". ' +
+      'TRAITEMENT DU BLOC "## RECHERCHE LIVE (NON VÉRIFIÉE — à confirmer juriste)" si présent dans la demande : chaque élément (titre + URL source + date) sert UNIQUEMENT de piste. Tout fait que tu en tires va dans hypotheses[] (jamais faits[]), avec dans sources[] la mention {verifiee:false, url, date_consultation}, et escalade.requise=true. Ne JAMAIS présenter un résultat de recherche live comme droit positif vérifié. Si le bloc indique que la recherche live est indisponible, dis-le explicitement et escalade : n\'invente rien. ' +
+      'Tu ne valides jamais une structure : tu prépares le dossier, le juriste tranche. ' +
+      LAWYER_JSON_CONTRACT,
+    permissions: { post_missive_comment: false, send_slack: false, write_notion: false },
+    slack_channel: '#ai-assistan-legal',
+    notion_config_id: '387c2ce245e8816bbb2bd80d54b0400e',
+    deterministic: true,
+    country_kb: true, // ADDITIF v1.25.0 : injecte les champs réglementaires de la fiche pays en contexte
+    kb_pages: [],
+  },
 };
 
 function handleAgentList_() {
@@ -2873,6 +3280,461 @@ function invokeAgent_(agentId, ctx, query, mode) {
   });
 }
 
+/**
+ * Lit le system prompt d'un agent depuis sa page Notion de config (texte des blocs).
+ * Cache CacheService ~1h, clé par pageId. Fail-open : toute erreur -> null (repli inline).
+ * Additif : appelé UNIQUEMENT pour les agents qui portent un notion_config_id.
+ * Rend les pages Notion éditables sans redéploiement, sans toucher aux agents existants.
+ */
+function getAgentSystemFromNotion_(pageId) {
+  if (!pageId) return null;
+  var cleanId = String(pageId).replace(/-/g, '');
+  var cacheKey = 'agent_system_notion_' + cleanId;
+  var cache = CacheService.getScriptCache();
+  try {
+    var cached = cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (_e) { /* fall through */ }
+
+  try {
+    var token = getSecret_('NOTION_API_TOKEN');
+    var url = 'https://api.notion.com/v1/blocks/' + cleanId + '/children?page_size=100';
+    var res = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: { 'Authorization': 'Bearer ' + token, 'Notion-Version': NOTION_API_VERSION },
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() !== 200) {
+      Logger.log('getAgentSystemFromNotion_ http ' + res.getResponseCode() + ' for ' + cleanId);
+      return null;
+    }
+    var data = JSON.parse(res.getContentText());
+    var blocks = data.results || [];
+    var lines = [];
+    for (var i = 0; i < blocks.length; i++) {
+      var b = blocks[i];
+      var t = b.type;
+      var node = b[t];
+      if (!node || !node.rich_text) continue;
+      var txt = richTextValue_(node.rich_text);
+      if (!txt) continue;
+      if (t === 'heading_1' || t === 'heading_2' || t === 'heading_3') {
+        lines.push('## ' + txt);
+      } else if (t === 'bulleted_list_item' || t === 'numbered_list_item') {
+        lines.push('- ' + txt);
+      } else {
+        lines.push(txt);
+      }
+    }
+    var sys = lines.join('\n').trim();
+    if (!sys) return null;
+    // Le contrat JSON de sortie n'est pas répété dans la page Notion : on l'ajoute toujours.
+    sys = sys + '\n\n' + LAWYER_JSON_CONTRACT;
+    try { cache.put(cacheKey, sys, 3600); } catch (_e2) { /* ignore */ }
+    return sys;
+  } catch (e) {
+    Logger.log('getAgentSystemFromNotion_ error: ' + (e && e.message));
+    return null;
+  }
+}
+
+/**
+ * Lit le CONTENU TEXTE des pages Notion "sources de fond" d'un agent (injection KB).
+ * - Pour chaque pageId : fetch des blocs enfants via l'API Notion (NOTION_API_TOKEN).
+ * - Si le contenu contient un pointeur "Source :" vers une autre page Notion, on suit
+ *   ce pointeur UNE seule fois et on lit la page cible (cas grilles 382c... -> Templates 352c...).
+ * - CacheService 3600s par pageId. try/catch fail-open : si une source échoue, on l'ignore
+ *   (on ne plante jamais l'invocation).
+ * - Retour : bloc "## SOURCES DE FOND POF ..." prêt à injecter, ou '' si rien d'exploitable.
+ * ADDITIF : appelé UNIQUEMENT depuis handleAgentInvoke_ pour les agents deterministic
+ * ayant des kb_pages. N'altère aucun agent existant.
+ */
+function getKbContent_(pageIds) {
+  if (!Array.isArray(pageIds) || !pageIds.length) return '';
+  var blocksOut = [];
+  for (var i = 0; i < pageIds.length; i++) {
+    try {
+      var txt = fetchNotionPageText_(pageIds[i], true);
+      if (txt) blocksOut.push(txt);
+    } catch (e) {
+      Logger.log('getKbContent_ source skip ' + pageIds[i] + ' : ' + (e && e.message));
+      // fail-open : on ignore cette source
+    }
+  }
+  if (!blocksOut.length) return '';
+  return '## SOURCES DE FOND POF (autorité, à citer, ne pas inventer)\n' + blocksOut.join('\n\n');
+}
+
+/**
+ * Récupère le texte d'une page Notion (blocs), avec cache 3600s par pageId.
+ * Si followPointer=true et que le texte référence "Source :" + un id/URL Notion,
+ * suit ce pointeur UNE fois et appelle le contenu de la page cible (sans re-suivre).
+ * Fail-open géré par l'appelant.
+ */
+function fetchNotionPageText_(pageId, followPointer) {
+  if (!pageId) return '';
+  var cleanId = String(pageId).replace(/^https?:\/\/[^\/]+\//, '').replace(/[?#].*$/, '').replace(/-/g, '');
+  var cacheKey = 'agent_kb_content_' + cleanId;
+  var cache = CacheService.getScriptCache();
+  try {
+    var cached = cache.get(cacheKey);
+    if (cached !== null && cached !== undefined) return cached;
+  } catch (_e) { /* fall through */ }
+
+  var token = getSecret_('NOTION_API_TOKEN');
+  var url = 'https://api.notion.com/v1/blocks/' + cleanId + '/children?page_size=100';
+  var res = UrlFetchApp.fetch(url, {
+    method: 'get',
+    headers: { 'Authorization': 'Bearer ' + token, 'Notion-Version': NOTION_API_VERSION },
+    muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() !== 200) {
+    Logger.log('fetchNotionPageText_ http ' + res.getResponseCode() + ' for ' + cleanId);
+    try { cache.put(cacheKey, '', 600); } catch (_e2) { /* ignore */ }
+    return '';
+  }
+  var data = JSON.parse(res.getContentText());
+  var blocks = data.results || [];
+  var lines = [];
+  for (var i = 0; i < blocks.length; i++) {
+    var b = blocks[i];
+    var t = b.type;
+    var node = b[t];
+    if (!node || !node.rich_text) continue;
+    var line = richTextValue_(node.rich_text);
+    if (!line) continue;
+    if (t === 'heading_1' || t === 'heading_2' || t === 'heading_3') {
+      lines.push('## ' + line);
+    } else if (t === 'bulleted_list_item' || t === 'numbered_list_item') {
+      lines.push('- ' + line);
+    } else {
+      lines.push(line);
+    }
+  }
+  var txt = lines.join('\n').trim();
+
+  // Suivi d'un pointeur "Source :" vers une autre page Notion (UNE seule fois).
+  if (followPointer && txt) {
+    var ptr = extractNotionPointer_(txt);
+    if (ptr && ptr !== cleanId) {
+      try {
+        var target = fetchNotionPageText_(ptr, false);
+        if (target) txt = txt + '\n\n[Source liée]\n' + target;
+      } catch (_e3) { /* fail-open : on garde le texte de la grille seule */ }
+    }
+  }
+
+  try { cache.put(cacheKey, txt, 3600); } catch (_e4) { /* ignore */ }
+  return txt;
+}
+
+/**
+ * Cherche un pointeur "Source :" suivi d'un id ou d'une URL Notion dans un texte.
+ * Retourne l'id 32-hex nettoyé, ou null. Tolérant : "Source", "Source :", "Source -".
+ */
+function extractNotionPointer_(txt) {
+  if (!txt) return null;
+  var m = txt.match(/Source\s*[:\-–]?\s*(?:https?:\/\/[^\s)]*?)?([0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/);
+  if (!m) return null;
+  return m[1].replace(/-/g, '');
+}
+
+/**
+ * Scoring/verdict DÉTERMINISTE pour les agents lawyer/* v2 (deterministic:true).
+ * Recalcule score + verdict depuis le tableau findings[] selon le contrat LAWYER_JSON_CONTRACT,
+ * indépendamment de ce que le modèle a renvoyé. Forçage escalade pour pacte / marque.
+ * ADDITIF : appelé pour tout agent deterministic:true. Depuis le port moteur v3 (2026-06-22),
+ * legal-analyzer est deterministic et passe donc ici (contrat findings[] normalisé).
+ * nda-expert / corporate-governance-expert restent sur leur schéma OK|ALERT|BLOCK (pas deterministic) — ne pas régresser.
+ * Mutation in-place + retour de l'objet. Fail-soft : si pas un objet exploitable, renvoie tel quel.
+ */
+function applyDeterministicVerdict_(parsedOutput) {
+  if (!parsedOutput || typeof parsedOutput !== 'object' || Array.isArray(parsedOutput)) return parsedOutput;
+  var findings = parsedOutput.findings;
+  if (!Array.isArray(findings)) return parsedOutput;
+
+  var nBlock = 0, nWarn = 0;
+  for (var i = 0; i < findings.length; i++) {
+    var s = findings[i] && findings[i].severite;
+    if (s === '🚫') nBlock++;
+    else if (s === '⚠️') nWarn++;
+  }
+
+  var score;
+  if (nBlock >= 3) score = 10;
+  else if (nBlock === 2) score = 8;
+  else if (nBlock === 1) score = 7;
+  else if (nWarn >= 2) score = 5;
+  else if (nWarn === 1) score = 4;
+  else score = 0;
+
+  var verdict;
+  if (score <= 3) verdict = 'GO';
+  else if (score <= 6) verdict = 'SOUS_CONDITIONS';
+  else verdict = 'NO_GO';
+
+  parsedOutput.score = score;
+  parsedOutput.verdict = verdict;
+
+  // Escalade : structurellement requise si score 9-10.
+  if (!parsedOutput.escalade || typeof parsedOutput.escalade !== 'object') {
+    parsedOutput.escalade = { requise: false, motif: '', cible: 'juriste humain' };
+  }
+  if (score >= 9) {
+    parsedOutput.escalade.requise = true;
+    if (!parsedOutput.escalade.motif) parsedOutput.escalade.motif = 'Score critique (>=9) : escalade structurelle.';
+  }
+
+  // Forçage métier : pacte ou marque -> escalade requise quel que soit le score.
+  var typeObj = String(parsedOutput.type_objet || '').toLowerCase();
+  if (typeObj.indexOf('pacte') !== -1 || typeObj.indexOf('marque') !== -1) {
+    parsedOutput.escalade.requise = true;
+    if (!parsedOutput.escalade.motif) {
+      parsedOutput.escalade.motif = 'Objet sensible (pacte / contrat de marque) : escalade humaine systématique.';
+    }
+  }
+
+  return parsedOutput;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ▼▼▼  DEEP LEGAL REVIEW (orchestrateur clause-par-clause)  ▼▼▼
+   ADDITIF strict. Ne s'active que pour lawyer/legal-orchestrator sur signal explicite.
+   Le routeur simple historique reste le défaut. Réutilise handleAgentInvoke_ en interne
+   (le GAS s'appelle lui-même logiquement, aucun appel HTTP). Garde-fous timeout/cap.
+   Réf spec P1.2 : revue par clause/thème + fiabilisation par criticité.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+// Cap DUR du nombre total d'appels Claude dans une revue (décompo + experts + synthèses).
+var MAX_REVIEW_CALLS = 6;
+// Budget temps : GAS coupe à ~6 min ; on stoppe proprement bien avant.
+var REVIEW_TIME_BUDGET_MS = 280000;
+// Seuil de longueur déclenchant la revue profonde même sans mode/flag explicite.
+var DEEP_REVIEW_QUERY_THRESHOLD = 600;
+
+/** Détecte une demande de revue profonde. Signaux : mode 'deep', flag review:true,
+ *  ou volume de texte (query + document) au-delà du seuil. */
+function isDeepReviewRequested_(body, query, ctx) {
+  if (body && (body.mode === 'deep' || body.review === true)) return true;
+  var docLen = (ctx && ctx.document_text) ? String(ctx.document_text).length : 0;
+  var total = (query ? query.length : 0) + docLen;
+  return total >= DEEP_REVIEW_QUERY_THRESHOLD;
+}
+
+/** Map domaine -> agent expert idoine. Hook 'kyc' laissé optionnel (pas d'agent KYC
+ *  dans ce GAS) : routé vers coherence-gouvernance avec note de contrepartie. */
+function routeDomaineToExpert_(domaine) {
+  var d = String(domaine || '').toLowerCase();
+  if (d.indexOf('fiscal') !== -1 || d.indexOf('tax') !== -1 || d.indexOf('montage') !== -1) return 'lawyer/tax-expert';
+  if (d.indexOf('structure') !== -1 || d.indexOf('for-profit') !== -1 || d.indexOf('non-profit') !== -1) return 'lawyer/structure-expert';
+  if (d.indexOf('gouvernance') !== -1 || d.indexOf('preempt') !== -1 || d.indexOf('préempt') !== -1 ||
+      d.indexOf('pacte') !== -1 || d.indexOf('marque') !== -1 || d.indexOf('conflit') !== -1 || d.indexOf('interne') !== -1) return 'lawyer/coherence-gouvernance';
+  if (d.indexOf('norme') !== -1 || d.indexOf('iso') !== -1 || d.indexOf('conformit') !== -1) return 'lawyer/norms-expert';
+  if (d.indexOf('contrepartie') !== -1 || d.indexOf('kyc') !== -1) return 'lawyer/coherence-gouvernance'; // hook KYC optionnel
+  if (d.indexOf('clause') !== -1 || d.indexOf('juridiction') !== -1 || d.indexOf('droit applicable') !== -1 ||
+      d.indexOf('contrat') !== -1 || d.indexOf('nda') !== -1 || d.indexOf('mou') !== -1) return 'lawyer/legal-analyzer';
+  return 'lawyer/legal-generic'; // hors périmètre / dernier recours
+}
+
+/** Criticité haute = pacte, marque, structure, fiscalité, gouvernance, montant élevé. */
+function isHighCriticality_(question, domaine) {
+  var t = (String(question || '') + ' ' + String(domaine || '')).toLowerCase();
+  var kw = ['pacte', 'marque', 'structure', 'fiscal', 'tax', 'gouvernance', 'préempt', 'preempt',
+            'actionnaire', 'capital', 'cession', 'montant élevé', 'montant eleve', 'm€', 'millions'];
+  for (var i = 0; i < kw.length; i++) { if (t.indexOf(kw[i]) !== -1) return true; }
+  return false;
+}
+
+/** Rang de sévérité d'un verdict normalisé (plus haut = plus sévère). */
+function verdictSeverityRank_(v) {
+  switch (String(v || '').toUpperCase()) {
+    case 'GO': return 0;
+    case 'SOUS_CONDITIONS': return 1;
+    case 'ESCALADE': return 2;
+    case 'NO_GO': return 3;
+    default: return 1; // inconnu -> prudence
+  }
+}
+
+/** Verdict global = le plus sévère de la liste. */
+function mostSevereVerdict_(verdicts) {
+  var best = 'GO', bestRank = -1;
+  for (var i = 0; i < verdicts.length; i++) {
+    var r = verdictSeverityRank_(verdicts[i]);
+    if (r > bestRank) { bestRank = r; best = String(verdicts[i] || '').toUpperCase() || 'GO'; }
+  }
+  return best;
+}
+
+/** Appel Claude brut pour la seule étape de décomposition (pas un agent du Registry). */
+function callAnthropicRaw_(model, system, prompt, maxTokens) {
+  var apiKey = getSecret_('ANTROPIC_API_TOKEN');
+  var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post', contentType: 'application/json',
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    payload: JSON.stringify({
+      model: model, max_tokens: maxTokens || 1500, system: system,
+      messages: [{ role: 'user', content: prompt }]
+    }),
+    muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) {
+    throw new Error('Anthropic ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
+  }
+  var data = JSON.parse(res.getContentText());
+  var tb = (data.content || []).filter(function (b) { return b.type === 'text'; })[0];
+  return { parsed: parseJsonLoose_(tb ? tb.text : ''), tokens: (data.usage && (data.usage.input_tokens + data.usage.output_tokens)) || 0 };
+}
+
+/** Étape (a) : décompose l'entrée en questions par clause/thème (1 appel Haiku). */
+function decomposeLegalQuestions_(query, ctx) {
+  var docText = (ctx && ctx.document_text) ? String(ctx.document_text).slice(0, 6000) : '';
+  var system = 'Tu es le décomposeur d\'une revue juridique POF. Tu reçois un document ou une requête et tu produis ' +
+    'la LISTE des questions à instruire, une par clause ou par thème juridique distinct. Tu ne réponds pas aux questions, tu les listes. ' +
+    'SORTIE STRICT JSON, sans markdown : {"questions":[{"question":"...","domaine":"clause|juridiction|fiscal|structure|gouvernance|norme|contrepartie|autre"}]}. ' +
+    'Domaines : clause/juridiction -> analyse de clause et droit applicable ; fiscal -> montage fiscal ; structure -> for/non-profit ; ' +
+    'gouvernance -> conflit interne, pacte, préemption, marque ; norme -> ISO/conformité ; contrepartie -> KYC/tiers ; autre -> hors périmètre. ' +
+    'Maximum 5 questions, regroupe les clauses voisines. Réponds en français.';
+  var prompt = (docText ? ('--- DOCUMENT ---\n' + docText + '\n\n') : '') + '--- REQUÊTE ---\n' + query;
+  var r = callAnthropicRaw_('claude-haiku-4-5', system, prompt, 1200);
+  var qs = (r.parsed && Array.isArray(r.parsed.questions)) ? r.parsed.questions : [];
+  // Repli : si décompo vide/échouée, traite la requête entière comme une seule question gouvernance.
+  if (!qs.length) qs = [{ question: query, domaine: 'autre' }];
+  return { questions: qs, tokens: r.tokens };
+}
+
+/** Orchestre la revue clause-par-clause. Réutilise handleAgentInvoke_ en interne. */
+function runLegalReview_(body, startMs) {
+  var query = String(body.query || '').trim();
+  var ctx   = body.context || {};
+  var calls = 0;
+  var partial = false, partialReason = '';
+
+  function budgetLeft_() { return (Date.now() - startMs) < REVIEW_TIME_BUDGET_MS; }
+
+  // (a) Décomposition (1 appel Haiku).
+  var decomp = decomposeLegalQuestions_(query, ctx);
+  calls += 1;
+  var questions = decomp.questions;
+
+  var perQuestion = [];
+  var globalVerdicts = [];
+  var allConseils = [];
+  var totalTokens = decomp.tokens;
+
+  for (var i = 0; i < questions.length; i++) {
+    // Garde-fous : cap d'appels et budget temps. On réserve 1 appel pour ne pas couper net.
+    if (calls >= MAX_REVIEW_CALLS) { partial = true; partialReason = 'cap atteint (' + MAX_REVIEW_CALLS + ' appels)'; break; }
+    if (!budgetLeft_()) { partial = true; partialReason = 'budget temps atteint'; break; }
+
+    var q = questions[i] || {};
+    var question = String(q.question || '').trim();
+    if (!question) continue;
+    var domaine = q.domaine || 'autre';
+    var expertId = routeDomaineToExpert_(domaine);
+    var critical = isHighCriticality_(question, domaine);
+
+    // Contexte transmis à l'expert : on conserve le document, on cible la question.
+    var qCtx = { document_text: ctx.document_text || question, subject: ctx.subject };
+
+    if (critical && (calls + 2) <= MAX_REVIEW_CALLS && budgetLeft_()) {
+      // (c) Criticité haute : 2 perspectives décorrélées (Sonnet) + synthèse.
+      var qA = 'POSTURE A (défense des intérêts POF, anti-risque) : ' + question;
+      var qB = 'POSTURE B (faisabilité / contrepartie, anti sur-restriction) : ' + question;
+      var rA = invokeAgent_(expertId, qCtx, qA, 'deep'); calls += 1;
+      var rB = invokeAgent_(expertId, qCtx, qB, 'deep'); calls += 1;
+      var outA = (rA && rA.output) || {};
+      var outB = (rB && rB.output) || {};
+      totalTokens += (rA && rA.tokens_used) || 0;
+      totalTokens += (rB && rB.tokens_used) || 0;
+
+      var consolidated = outA, synthTokens = 0, synthUsed = false;
+      if ((calls + 1) <= MAX_REVIEW_CALLS && budgetLeft_()) {
+        var synthQuery = 'Réconcilie ces deux avis indépendants sur la même question.\n\nQUESTION : ' + question +
+          '\n\nAVIS A (défense POF) :\n' + JSON.stringify(outA) +
+          '\n\nAVIS B (faisabilité / contrepartie) :\n' + JSON.stringify(outB);
+        var rS = invokeAgent_('lawyer/synthese', qCtx, synthQuery, 'deep'); calls += 1;
+        synthTokens = (rS && rS.tokens_used) || 0;
+        totalTokens += synthTokens;
+        if (rS && rS.output && !rS.output.error) { consolidated = rS.output; synthUsed = true; }
+      }
+      var vCons = (consolidated && consolidated.verdict) || mostSevereVerdict_([outA.verdict, outB.verdict]);
+      globalVerdicts.push(vCons);
+      if (consolidated && Array.isArray(consolidated.conseils)) allConseils = allConseils.concat(consolidated.conseils);
+      perQuestion.push({
+        question: question, domaine: domaine, criticite: 'haute',
+        experts: [expertId + ' (A)', expertId + ' (B)'].concat(synthUsed ? ['lawyer/synthese'] : []),
+        verdict: vCons,
+        verdict_A: outA.verdict || null, verdict_B: outB.verdict || null,
+        findings: (consolidated && consolidated.findings) || [],
+        escalade: (consolidated && consolidated.escalade) || null,
+        source_refs: (consolidated && consolidated.sources) || []
+      });
+    } else {
+      // (b) Criticité faible : 1 expert (Haiku via mode fast).
+      var r1 = invokeAgent_(expertId, qCtx, question, 'fast'); calls += 1;
+      var out1 = (r1 && r1.output) || {};
+      totalTokens += (r1 && r1.tokens_used) || 0;
+      var v1 = out1.verdict || 'SOUS_CONDITIONS';
+      globalVerdicts.push(v1);
+      if (Array.isArray(out1.conseils)) allConseils = allConseils.concat(out1.conseils);
+      perQuestion.push({
+        question: question, domaine: domaine, criticite: critical ? 'haute (dégradée: cap/budget)' : 'faible',
+        experts: [expertId],
+        verdict: v1,
+        findings: out1.findings || [],
+        escalade: out1.escalade || null,
+        source_refs: out1.sources || []
+      });
+    }
+  }
+
+  // S'il reste des questions non traitées (cap/budget), marque la revue partielle.
+  if (perQuestion.length < questions.length) {
+    partial = true;
+    if (!partialReason) partialReason = 'revue tronquée';
+  }
+
+  // (d) Agrégation : verdict global = le plus sévère ; escalade si un seul l'exige.
+  var globalVerdict = mostSevereVerdict_(globalVerdicts);
+  var escaladeRequise = false, escaladeMotifs = [];
+  for (var j = 0; j < perQuestion.length; j++) {
+    var e = perQuestion[j].escalade;
+    if (e && e.requise) { escaladeRequise = true; if (e.motif) escaladeMotifs.push(e.motif); }
+    if (verdictSeverityRank_(perQuestion[j].verdict) >= 3) escaladeRequise = true; // NO_GO -> escalade
+  }
+
+  Logger.log('runLegalReview_ : ' + calls + ' appels Claude, ' + perQuestion.length + '/' + questions.length +
+             ' questions, verdict ' + globalVerdict + (partial ? ' [PARTIEL: ' + partialReason + ']' : ''));
+
+  return {
+    ok: true,
+    agent: 'lawyer/legal-orchestrator',
+    mode: 'deep',
+    model: ANTHROPIC_MODEL,
+    output: {
+      review: true,
+      verdict_global: globalVerdict,
+      escalade: { requise: escaladeRequise, motif: escaladeMotifs.join(' | '), cible: 'juriste humain' },
+      questions_count: questions.length,
+      questions_traitees: perQuestion.length,
+      partial: partial,
+      partial_reason: partial ? partialReason : '',
+      conseils: allConseils,
+      par_question: perQuestion,
+      disclaimer: 'Avis assiste par IA. Ne certifie pas, ne remplace pas un avis juridique.'
+    },
+    calls_made: calls,
+    cap: MAX_REVIEW_CALLS,
+    tokens_used: totalTokens,
+    duration_ms: Date.now() - startMs
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ▲▲▲  DEEP LEGAL REVIEW  ▲▲▲
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
 function handleAgentInvoke_(body) {
   var startMs = Date.now();
   var agentId = String(body.agent || '');
@@ -2884,12 +3746,83 @@ function handleAgentInvoke_(body) {
   if (!query)   return { ok: false, error: 'query required' };
   if (!AGENTS[agentId]) return { ok: false, error: 'unknown agent: ' + agentId, available: Object.keys(AGENTS) };
 
+  // ADDITIF (DEEP-PATH, NEW-BEHAVIOR-ONLY) : revue clause-par-clause de l'orchestrateur.
+  // Strictement gardé : ne se déclenche QUE pour lawyer/legal-orchestrator ET un signal
+  // explicite (mode 'deep', flag review:true, ou document/requête longue). Sinon, le
+  // routeur simple historique s'exécute inchangé en aval. Aucun autre agent n'est touché.
+  if (agentId === 'lawyer/legal-orchestrator' && isDeepReviewRequested_(body, query, ctx)) {
+    try {
+      return runLegalReview_(body, startMs);
+    } catch (eDeep) {
+      // Fail-open : si la revue profonde casse, on retombe sur le routeur simple ci-dessous.
+      Logger.log('runLegalReview_ failed, fallback to simple router : ' + (eDeep && eDeep.message));
+    }
+  }
+
   var agent = AGENTS[agentId];
   var model = agent.model;
   // mode=deep upgrade Haiku → Sonnet si applicable
   if (mode === 'deep' && model === 'claude-haiku-4-5') model = ANTHROPIC_MODEL;
 
   var prompt = buildAgentPrompt_(agent, ctx, query);
+
+  // ADDITIF : injection KB runtime. Strictement gardé par le flag deterministic.
+  // Porté par les agents lawyer/* v2 ET, depuis le port moteur v3 (2026-06-22), par
+  // lawyer/legal-analyzer. nda-expert / corporate-governance-expert portent un champ
+  // kb_pages mais PAS deterministic:true -> non touchés (pas d'injection runtime).
+  if (agent.deterministic && Array.isArray(agent.kb_pages) && agent.kb_pages.length) {
+    try {
+      var kbBlock = getKbContent_(agent.kb_pages);
+      if (kbBlock) prompt = prompt + '\n\n' + kbBlock;
+    } catch (eKb) {
+      Logger.log('KB injection skipped for ' + agentId + ' : ' + (eKb && eKb.message));
+    }
+  }
+
+  // ADDITIF (COUCHE PAYS, v1.25.0) : injection des champs réglementaires de la fiche pays.
+  // Strictement gardé par le flag country_kb:true (4 agents lawyer/* concernés). Pour les
+  // autres agents, ce bloc ne s'exécute jamais. Fail-open : toute erreur -> pas de bloc.
+  if (agent.country_kb === true) {
+    try {
+      var countryTitle = resolveCountryFromContext_(ctx, query);
+      if (countryTitle) {
+        var regBlock = getCountryRegFields_(countryTitle);
+        if (regBlock) prompt = prompt + '\n\n' + regBlock;
+      }
+    } catch (eReg) {
+      Logger.log('country reg-fields injection skipped for ' + agentId + ' : ' + (eReg && eReg.message));
+    }
+  }
+
+  // ADDITIF (COUCHE 2, NEW-AGENT-ONLY) : recherche juridique LIVE multi-pays.
+  // Strictement gardé : UNIQUEMENT lawyer/legal-generic. Aucun autre agent n'est touché.
+  // fail-open : si la recherche live casse ou expire, l'invocation continue sans bloc live.
+  if (agentId === 'lawyer/legal-generic') {
+    try {
+      var paysLive = String((ctx && (ctx.pays || ctx.country)) || '').trim();
+      var liveBlock = liveLegalResearch_(query, paysLive);
+      if (liveBlock && liveBlock.promptBlock) {
+        prompt = prompt + '\n\n' + liveBlock.promptBlock;
+        // CACHE additif et non intrusif dans la DB Pays (jamais de création de fiche auto).
+        try {
+          cacheLiveResearchToPays_(paysLive, liveBlock);
+        } catch (eCache) {
+          Logger.log('cacheLiveResearchToPays_ skipped : ' + (eCache && eCache.message));
+        }
+      }
+    } catch (eLive) {
+      Logger.log('liveLegalResearch_ skipped for legal-generic : ' + (eLive && eLive.message));
+    }
+  }
+
+  // System effectif. ADDITIF : si l'agent porte un notion_config_id, on lit le system
+  // en live sur Notion (cache 1h). Toute erreur -> repli sur agent.system inline.
+  // Les agents SANS notion_config_id restent strictement inchangés.
+  var systemPrompt = agent.system;
+  if (agent.notion_config_id) {
+    var notionSystem = getAgentSystemFromNotion_(agent.notion_config_id);
+    if (notionSystem) systemPrompt = notionSystem;
+  }
 
   var apiKey = getSecret_('ANTROPIC_API_TOKEN');
   var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
@@ -2898,7 +3831,7 @@ function handleAgentInvoke_(body) {
     payload: JSON.stringify({
       model: model,
       max_tokens: agent.max_tokens || 1000,
-      system: agent.system,
+      system: systemPrompt,
       messages: [{ role: 'user', content: prompt }]
     }),
     muteHttpExceptions: true
@@ -2915,6 +3848,15 @@ function handleAgentInvoke_(body) {
   var parsedOutput = null;
   if (agent.output_format === 'json') {
     parsedOutput = parseJsonLoose_(rawText);
+    // ADDITIF (NEW-AGENTS-ONLY) : scoring/verdict déterministe pour les 6 agents lawyer/* v2.
+    // Gardé par deterministic:true ; jamais appliqué aux agents legacy (schéma différent).
+    if (agent.deterministic && parsedOutput && !parsedOutput.error) {
+      try {
+        parsedOutput = applyDeterministicVerdict_(parsedOutput);
+      } catch (eDet) {
+        Logger.log('deterministic verdict skipped for ' + agentId + ' : ' + (eDet && eDet.message));
+      }
+    }
   }
 
   return {
@@ -2978,6 +3920,401 @@ function getSecret_(name) {
   if (parsed.error) throw new Error('Secret non trouve ou erreur proxy : ' + parsed.error);
   if (!parsed.value) throw new Error('Secret vide : ' + name);
   return parsed.value;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   COUCHE 2 — RECHERCHE JURIDIQUE LIVE (ADDITIF, lawyer/legal-generic UNIQUEMENT)
+   Câblage Reg-C : source primaire Legal Data Hunter (REST), repli web Tavily.
+   Sourcing obligatoire + escalade. Aucune donnée présentée comme fait vérifié.
+   Tout est fail-open : jamais bloquant pour l'invocation de l'agent.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+const LIVE_LEGAL_TIMEOUT_MS = 25000; // budget court, fail-open au-delà
+const LDH_SEARCH_URL = 'https://legaldatahunter.com/v1/search';
+const TAVILY_SEARCH_URL = 'https://api.tavily.com/search';
+const ISO_BY_COUNTRY = {
+  'senegal': 'SN', 'sénégal': 'SN', 'france': 'FR', 'côte d\'ivoire': 'CI',
+  'cote d\'ivoire': 'CI', 'mali': 'ML', 'maroc': 'MA', 'morocco': 'MA',
+  'tunisie': 'TN', 'algerie': 'DZ', 'algérie': 'DZ', 'cameroun': 'CM',
+  'allemagne': 'DE', 'germany': 'DE', 'espagne': 'ES', 'spain': 'ES',
+  'kenya': 'KE', 'nigeria': 'NG', 'ghana': 'GH', 'rwanda': 'RW',
+  'belgique': 'BE', 'belgium': 'BE', 'portugal': 'PT', 'italie': 'IT'
+};
+
+/**
+ * Recherche juridique live multi-pays. LDH REST en primaire, Tavily en repli.
+ * Retour : { source, available, items:[{title,url,date,snippet,jurisdiction}], promptBlock } ou null.
+ * promptBlock est TOUJOURS marqué "NON VÉRIFIÉE". Si aucune source dispo, promptBlock
+ * indique explicitement l'indisponibilité (l'agent doit le dire + escalader, pas inventer).
+ */
+function liveLegalResearch_(query, pays) {
+  var today = new Date().toISOString().slice(0, 10);
+  var result = { source: null, available: false, items: [], promptBlock: '', pays: pays || '', date: today };
+
+  // 1) Legal Data Hunter (REST primaire)
+  try {
+    var ldh = ldhSearch_(query, pays);
+    if (ldh && ldh.length) {
+      result.source = 'Legal Data Hunter (REST)';
+      result.available = true;
+      result.items = ldh;
+      result.promptBlock = buildLiveResearchBlock_(ldh, result.source, today);
+      return result;
+    }
+  } catch (eLdh) {
+    Logger.log('ldhSearch_ failed : ' + (eLdh && eLdh.message));
+  }
+
+  // 2) Repli web Tavily
+  try {
+    var tav = legalTavilySearch_(query, pays);
+    if (tav && tav.length) {
+      result.source = 'Tavily (recherche web)';
+      result.available = true;
+      result.items = tav;
+      result.promptBlock = buildLiveResearchBlock_(tav, result.source, today);
+      return result;
+    }
+  } catch (eTav) {
+    Logger.log('tavilySearch_ failed : ' + (eTav && eTav.message));
+  }
+
+  // 3) Aucune source dispo : bloc d'indisponibilité honnête (pas d'invention).
+  result.promptBlock =
+    '## RECHERCHE LIVE (NON VÉRIFIÉE — à confirmer juriste)\n' +
+    'INDISPONIBLE : aucune source live n\'a répondu (Legal Data Hunter et repli web inaccessibles) le ' + today + '. ' +
+    'Tu DOIS le signaler explicitement dans À VÉRIFIER PAR JURISTE, ne rien inventer, et mettre escalade.requise=true.';
+  return result;
+}
+
+/** Appel REST Legal Data Hunter. POST /v1/search, auth Bearer sk-... . */
+function ldhSearch_(query, pays) {
+  var apiKey = getSecret_('LEGALDATAHUNTER_API_KEY');
+  var iso = countryToIso_(pays);
+  var payload = { q: query, namespace: 'legislation', top_k: 5, alpha: 0.7 };
+  if (iso) payload.country = [iso];
+  var res = UrlFetchApp.fetch(LDH_SEARCH_URL, {
+    method: 'post', contentType: 'application/json',
+    headers: { 'Authorization': 'Bearer ' + apiKey },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+    timeoutSeconds: Math.round(LIVE_LEGAL_TIMEOUT_MS / 1000)
+  });
+  var code = res.getResponseCode();
+  if (code !== 200) {
+    throw new Error('LDH http ' + code + ' : ' + res.getContentText().slice(0, 200));
+  }
+  var data = JSON.parse(res.getContentText());
+  var hits = data.hits || [];
+  return hits.map(function (h) {
+    return {
+      title: h.title || h.case_number || h.ecli || '(sans titre)',
+      url: h.url || '',
+      date: h.date || '',
+      snippet: (h.snippet || '').slice(0, 400),
+      jurisdiction: h.jurisdiction || h.country || ''
+    };
+  }).filter(function (it) { return it.url; });
+}
+
+/** Repli recherche web Tavily (couche 2 juridique). POST /search, clé dans le body.
+ *  Nom dédié pour ne PAS entrer en collision avec tavilySearch_(query) (enrichissement contact). */
+function legalTavilySearch_(query, pays) {
+  var apiKey = getSecret_('TAVILY_API_KEY');
+  var q = pays ? (query + ' (droit ' + pays + ')') : query;
+  var res = UrlFetchApp.fetch(TAVILY_SEARCH_URL, {
+    method: 'post', contentType: 'application/json',
+    payload: JSON.stringify({
+      api_key: apiKey,
+      query: q,
+      search_depth: 'basic',
+      max_results: 5,
+      include_answer: false
+    }),
+    muteHttpExceptions: true,
+    timeoutSeconds: Math.round(LIVE_LEGAL_TIMEOUT_MS / 1000)
+  });
+  var code = res.getResponseCode();
+  if (code !== 200) {
+    throw new Error('Tavily http ' + code + ' : ' + res.getContentText().slice(0, 200));
+  }
+  var data = JSON.parse(res.getContentText());
+  var results = data.results || [];
+  return results.map(function (r) {
+    return {
+      title: r.title || '(sans titre)',
+      url: r.url || '',
+      date: r.published_date || '',
+      snippet: (r.content || '').slice(0, 400),
+      jurisdiction: pays || ''
+    };
+  }).filter(function (it) { return it.url; });
+}
+
+/** Construit le bloc prompt "RECHERCHE LIVE" marqué non vérifié, sources datées. */
+function buildLiveResearchBlock_(items, sourceLabel, today) {
+  var lines = [
+    '## RECHERCHE LIVE (NON VÉRIFIÉE — à confirmer juriste)',
+    'Source : ' + sourceLabel + ' — consultée le ' + today + '. ' +
+    'Ces éléments sont des PISTES, pas du droit positif vérifié. ' +
+    'Tout fait qui en découle va en HYPOTHESE (jamais en FAIT SOURCÉ), ' +
+    'avec sources[].verifiee=false et escalade.requise=true.'
+  ];
+  items.forEach(function (it, i) {
+    lines.push(
+      (i + 1) + '. ' + it.title +
+      (it.jurisdiction ? ' [' + it.jurisdiction + ']' : '') +
+      (it.date ? ' (' + it.date + ')' : '') +
+      '\n   URL : ' + it.url +
+      (it.snippet ? '\n   Extrait : ' + it.snippet : '')
+    );
+  });
+  return lines.join('\n');
+}
+
+/** Normalise un nom de pays FR/EN vers code ISO-2 pour le filtre LDH. */
+function countryToIso_(pays) {
+  if (!pays) return '';
+  var key = String(pays).trim().toLowerCase();
+  return ISO_BY_COUNTRY[key] || '';
+}
+
+/**
+ * CACHE additif dans la DB Pays. Si une fiche dont le titre (Nom) == pays existe,
+ * on AJOUTE un bloc daté "Recherche live (à vérifier)" en bas de la page.
+ * Si aucune fiche ne correspond : on LOG seulement (jamais de création auto), pour
+ * rester additif et non intrusif. fail-open intégral.
+ */
+function cacheLiveResearchToPays_(pays, liveBlock) {
+  if (!pays || !liveBlock || !liveBlock.available || !liveBlock.items.length) {
+    Logger.log('cacheLiveResearchToPays_ : rien à cacher (pays/items absents)');
+    return { cached: false, reason: 'no_data' };
+  }
+  var PAYS_DB_ID = '2a6c2ce245e880d29006f370c273db10';
+  var search = notionFetch_('POST', '/databases/' + PAYS_DB_ID + '/query', {
+    filter: { property: 'Nom', title: { equals: String(pays).trim() } },
+    page_size: 1
+  });
+  if (!search.results || !search.results.length) {
+    Logger.log('cacheLiveResearchToPays_ : aucune fiche Pays "' + pays + '", pas de création auto (log only).');
+    return { cached: false, reason: 'no_country_page' };
+  }
+  var pageId = search.results[0].id;
+  var today = liveBlock.date;
+
+  var children = [{
+    object: 'block', type: 'heading_3',
+    heading_3: { rich_text: [{ type: 'text', text: { content: '🔎 Recherche live (à vérifier) — ' + today } }] }
+  }, {
+    object: 'block', type: 'paragraph',
+    paragraph: { rich_text: [{ type: 'text', text: {
+      content: 'Source : ' + liveBlock.source + '. Données NON vérifiées, à confirmer par un juriste avant tout usage.'
+    } }] }
+  }];
+  liveBlock.items.slice(0, 5).forEach(function (it) {
+    var label = it.title + (it.date ? ' (' + it.date + ')' : '');
+    children.push({
+      object: 'block', type: 'bulleted_list_item',
+      bulleted_list_item: { rich_text: [
+        { type: 'text', text: { content: label + ' — ' }, annotations: {} },
+        { type: 'text', text: { content: it.url, link: it.url ? { url: it.url } : null } }
+      ] }
+    });
+  });
+
+  notionFetch_('PATCH', '/blocks/' + pageId + '/children', { children: children });
+  Logger.log('cacheLiveResearchToPays_ : bloc daté ajouté à la fiche Pays ' + pays);
+  return { cached: true, page_id: pageId };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   COUCHE PAYS — INJECTION CHAMPS RÉGLEMENTAIRES DB PAYS (ADDITIF, v1.25.0)
+   Strictement gardé : appelé UNIQUEMENT depuis handleAgentInvoke_ pour les agents
+   portant le flag country_kb:true (lawyer/tax-expert, lawyer/structure-expert,
+   lawyer/legal-generic, lawyer/coherence-gouvernance). Aucun autre agent touché.
+   Fail-open partout : toute erreur -> '' (l'invocation continue sans le bloc).
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+const COUNTRY_REG_DB_ID = '2a6c2ce245e880d29006f370c273db10';
+// Champs réglementaires lus sur une fiche pays (ordre d'affichage dans le bloc injecté).
+const COUNTRY_REG_FIELDS = [
+  'Fiscalité & conventions',
+  'Structures juridiques & non-profit',
+  'Douanes, commerce & investissement',
+  'Réglementation plastique & déchets (REP)',
+  'Normes & certifications',
+  'Risques & conformité (AML/sanctions)'
+];
+// Table d'alias -> titre canonique DB Pays. Clés normalisées (sans accent, lowercase).
+// Le matching se fait par substring sur la query normalisée.
+const COUNTRY_ALIASES = [
+  { aliases: ['maurice', 'mauritius'], title: 'Maurice' },
+  { aliases: ['philippines'], title: 'Strat. Philippines' },
+  { aliases: ['indonesie', 'indonesia'], title: 'Strat. Indonésie' },
+  { aliases: ['senegal'], title: 'Strat. Sénégal' },
+  { aliases: ["cote d'ivoire", 'ivory coast', 'rci'], title: "Côte d'Ivoire" },
+  { aliases: ['kenya'], title: 'Kenya' },
+  { aliases: ['cameroun', 'cameroon'], title: 'Cameroun' },
+  { aliases: ['maroc', 'morocco'], title: 'Strat. Maroc' },
+  { aliases: ['singapore', 'singapour'], title: 'Singapore' },
+  { aliases: ['france'], title: 'France' }
+];
+
+/** Normalise une chaîne : minuscules, sans accents, sans préfixe "Strat.", espaces compactés. */
+function normalizeCountryStr_(s) {
+  if (!s) return '';
+  var t = String(s).toLowerCase();
+  // retire le préfixe stratégique éventuel ("strat. " / "strat ")
+  t = t.replace(/^strat\.?\s+/, '');
+  // décompose les accents puis les supprime
+  if (t.normalize) t = t.normalize('NFD').replace(/[̀-ͯ]/g, '');
+  t = t.replace(/\s+/g, ' ').trim();
+  return t;
+}
+
+/**
+ * Résout un pays canonique depuis le contexte ou la query.
+ * Source 1 (prioritaire) : ctx.pays (ou ctx.country).
+ * Source 2 : scan de la query contre COUNTRY_ALIASES (substring normalisé).
+ * Retourne le TITRE canonique d'alias ou null. Fail-open : toute erreur -> null.
+ */
+function resolveCountryFromContext_(ctx, query) {
+  try {
+    // Source 1 : contexte explicite
+    var ctxPays = ctx && (ctx.pays || ctx.country);
+    if (ctxPays) {
+      var nctx = normalizeCountryStr_(ctxPays);
+      if (nctx) {
+        for (var i = 0; i < COUNTRY_ALIASES.length; i++) {
+          var entry = COUNTRY_ALIASES[i];
+          if (entry.aliases.indexOf(nctx) !== -1 || normalizeCountryStr_(entry.title) === nctx) {
+            return entry.title;
+          }
+        }
+        // ctx.pays fourni mais hors table : renvoyé tel quel (le matcher DB normalise,
+        // ex. "Sénégal" -> matchera la fiche "Strat. Sénégal").
+        return String(ctxPays).trim();
+      }
+    }
+    // Source 2 : scan de la query
+    var nq = normalizeCountryStr_(query);
+    if (nq) {
+      for (var j = 0; j < COUNTRY_ALIASES.length; j++) {
+        var e = COUNTRY_ALIASES[j];
+        for (var k = 0; k < e.aliases.length; k++) {
+          if (nq.indexOf(e.aliases[k]) !== -1) return e.title;
+        }
+      }
+    }
+    return null;
+  } catch (err) {
+    Logger.log('resolveCountryFromContext_ error: ' + (err && err.message));
+    return null;
+  }
+}
+
+/**
+ * Lit les champs réglementaires de la fiche pays correspondante (DB Pays) et
+ * formate un bloc prêt à injecter. Cache 3600s par pays.
+ * - Récupère TOUTES les fiches pays (≤ ~12), normalise les titres (retire "Strat. ",
+ *   accents, casse), matche le pays demandé.
+ * - Lit les 6 champs de fond + statut + date + sources de la page trouvée.
+ * - Si statut != "Validé juriste" -> préfixe un avertissement non-validé + escalade.
+ * Fail-open : toute erreur ou absence -> ''.
+ */
+function getCountryRegFields_(countryTitle) {
+  if (!countryTitle) return '';
+  var wanted = normalizeCountryStr_(countryTitle);
+  if (!wanted) return '';
+
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'country_reg_fields_' + wanted.replace(/[^a-z0-9]/g, '_');
+  try {
+    var cached = cache.get(cacheKey);
+    if (cached !== null && cached !== undefined) return cached;
+  } catch (_eC) { /* fall through */ }
+
+  try {
+    // Récupère toutes les fiches pays (base petite : pagination simple, garde-fou 5).
+    var allPages = [];
+    var cursor = null;
+    var guard = 0;
+    do {
+      var payload = { page_size: 100 };
+      if (cursor) payload.start_cursor = cursor;
+      var resp = notionFetch_('POST', '/databases/' + COUNTRY_REG_DB_ID + '/query', payload);
+      allPages = allPages.concat(resp.results || []);
+      cursor = resp.has_more ? resp.next_cursor : null;
+      guard++;
+    } while (cursor && guard < 5);
+
+    // Matche le pays par titre normalisé.
+    var match = null;
+    for (var i = 0; i < allPages.length; i++) {
+      var props = allPages[i].properties || {};
+      var titleProp = props['Nom'] && props['Nom'].title ? props['Nom'].title : [];
+      var nom = richTextValue_(titleProp);
+      if (normalizeCountryStr_(nom) === wanted) { match = allPages[i]; break; }
+    }
+    if (!match) {
+      try { cache.put(cacheKey, '', 600); } catch (_e1) { /* ignore */ }
+      return '';
+    }
+
+    var mProps = match.properties || {};
+    function readText_(name) {
+      var p = mProps[name];
+      if (!p) return '';
+      if (p.rich_text) return richTextValue_(p.rich_text).trim();
+      if (p.select && p.select.name) return String(p.select.name).trim();
+      if (p.date && p.date.start) return String(p.date.start).trim();
+      return '';
+    }
+
+    var nomCanon = richTextValue_((mProps['Nom'] && mProps['Nom'].title) || []).trim();
+    var statut = readText_('Statut validation réglementaire');
+    var dateVerif = readText_('Date vérif réglementaire');
+    var sources = readText_('Sources réglementaires');
+
+    var lines = [];
+    lines.push('## FICHE PAYS — ' + nomCanon +
+      ' (réglementaire, source DB Pays, statut ' + (statut || 'inconnu') +
+      ', vérif ' + (dateVerif || 'non datée') + ')');
+
+    // Avertissement non-validé juriste.
+    if (statut !== 'Validé juriste') {
+      lines.push('⚠️ Données NON validées juriste — traiter comme à vérifier + escalade.');
+    }
+
+    var hasContent = false;
+    for (var f = 0; f < COUNTRY_REG_FIELDS.length; f++) {
+      var fieldName = COUNTRY_REG_FIELDS[f];
+      var val = readText_(fieldName);
+      if (!val) continue;
+      hasContent = true;
+      // Cap par champ pour borner la taille du prompt.
+      if (val.length > 1500) val = val.slice(0, 1500) + ' […]';
+      lines.push('\n### ' + fieldName + '\n' + val);
+    }
+
+    if (!hasContent) {
+      // Aucun champ réglementaire renseigné : pas d'injection utile.
+      try { cache.put(cacheKey, '', 600); } catch (_e2) { /* ignore */ }
+      return '';
+    }
+
+    if (sources) {
+      if (sources.length > 800) sources = sources.slice(0, 800) + ' […]';
+      lines.push('\nSources: ' + sources);
+    }
+
+    var block = lines.join('\n').trim();
+    try { cache.put(cacheKey, block, 3600); } catch (_e3) { /* ignore */ }
+    return block;
+  } catch (err) {
+    Logger.log('getCountryRegFields_ error for "' + countryTitle + '": ' + (err && err.message));
+    return '';
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -3291,14 +4628,15 @@ function _pushFeedbackPattern_(g, windowDays, weekStamp) {
       headers: { 'Authorization': 'Bearer ' + getSecret_('NOTION_API_TOKEN'), 'Notion-Version': NOTION_API_VERSION },
       payload: JSON.stringify({
         parent: { database_id: FEEDBACK_DB_ID },
+        // Noms/types alignés sur le schéma réel de Feedback Atomic (title='Titre',
+        // Status=type status, Domain=select ; pas de 'Source'/'Description'). (audit C5)
         properties: {
-          'Name': { title: [{ text: { content: title.slice(0, 200) } }] },
+          'Titre': { title: [{ text: { content: title.slice(0, 200) } }] },
           'Type': { select: { name: 'improvement' } },
-          'Domain': { select: { name: 'Agent' } },
+          'Domain': { select: { name: 'Workflow' } },
           'Severity': { select: { name: 'low' } },
-          'Status': { select: { name: 'Pending' } },
-          'Source': { select: { name: 'agent' } },
-          'Description': { rich_text: [{ text: { content: description.slice(0, 1900) } }] },
+          'Status': { status: { name: 'Pas commencé' } },
+          'Demande utilisateur': { rich_text: [{ text: { content: description.slice(0, 1900) } }] },
         },
       }),
       muteHttpExceptions: true,
@@ -3414,17 +4752,26 @@ function handleAskAgentWithLogging_(body) {
     tools.push('chat_libre');
   }
 
-  // Persiste Agent session ID sur la Conv (cosmétique pour V1, utile pour le pipeline cron qui lit aussi ce champ)
+  // NE JAMAIS écrire dans la propriété qui sert de clé de lookup des Conversations.
+  // Par défaut « Agent session ID » = CONV_MISSIVE_ID_PROP, la clé où ensureConvPage_
+  // stocke le conversation_id Missive (lookup_conv, list_tasks, readConvSituation_...).
+  // Y écrire le session_id « sb_xxx » orphelinait la page (synthèse, tâches, instructions
+  // introuvables) et provoquait des doublons. Le session_id est déjà loggué dans
+  // sidebar_interactions via logSidebarInteraction_. (audit C1)
   try {
+    var lookupKeyProp = cfg_('CONV_MISSIVE_ID_PROP') || 'Agent session ID';
     var convPageId = ensureConvPage_(body.conversation_id);
     if (convPageId) {
+      var convProps = { 'Last agent': { rich_text: [{ text: { content: SIDEBAR_AGENT_ID + ' · ' + intentReported } }] } };
+      // On ne stocke le session_id sur la Conv que si la clé de lookup est configurée
+      // sur une AUTRE propriété (jamais sur « Agent session ID » elle-même).
+      if (lookupKeyProp !== 'Agent session ID') {
+        convProps['Agent session ID'] = { rich_text: [{ text: { content: sessionId } }] };
+      }
       UrlFetchApp.fetch('https://api.notion.com/v1/pages/' + convPageId, {
         method: 'patch', contentType: 'application/json',
         headers: { 'Authorization': 'Bearer ' + getSecret_('NOTION_API_TOKEN'), 'Notion-Version': NOTION_API_VERSION },
-        payload: JSON.stringify({ properties: {
-          'Agent session ID': { rich_text: [{ text: { content: sessionId } }] },
-          'Last agent': { rich_text: [{ text: { content: SIDEBAR_AGENT_ID + ' · ' + intentReported } }] },
-        } }),
+        payload: JSON.stringify({ properties: convProps }),
         muteHttpExceptions: true,
       });
     }

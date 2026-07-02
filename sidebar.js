@@ -192,6 +192,13 @@ function initials(name) {
 function notionHref(pageId) {
   return `https://notion.so/${(pageId || '').replace(/-/g, '')}`;
 }
+/* Filtre le scheme d'une URL avant de l'injecter dans un href. esc() n'échappe pas
+   le scheme : un lien `javascript:` extrait par l'IA du contenu d'un mail externe
+   passerait sinon (XSS). On n'autorise que http(s) et mailto. */
+function safeHref(u) {
+  const s = String(u || '').trim();
+  return /^(https?:|mailto:)/i.test(s) ? s : '#';
+}
 
 /* Parse un lien Folk → {folk_id, network_id, group_id, url}.
    Tolère les deux formats : .../groups/{grp}/people/{id} et .../people/{id}.
@@ -209,7 +216,7 @@ function parseFolkUrl(url) {
    reads the same way across the whole sidebar. */
 function notionPill(href, { label = 'Notion', title = 'Ouvrir dans Notion' } = {}) {
   const arrow = `<svg class="pill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>`;
-  return `<a class="notion-pill" href="${esc(href || '#')}" target="_blank" rel="noopener" title="${esc(title)}" aria-label="${esc(title)}"><span>${esc(label)}</span>${arrow}</a>`;
+  return `<a class="notion-pill" href="${esc(safeHref(href))}" target="_blank" rel="noopener" title="${esc(title)}" aria-label="${esc(title)}"><span>${esc(label)}</span>${arrow}</a>`;
 }
 
 /* ════════════════════════════════════════════════════════
@@ -319,6 +326,7 @@ async function promoteParticipant(idx) {
    ════════════════════════════════════════════════════════ */
 async function loadConvInstructions(convId) {
   const data = await callProxy('lookup_conv', { missive_conversation_id: convId });
+  if (convId !== S.conversationId) return;  // conversation changée pendant l'appel : ne pas écraser l'état de la nouvelle
   const instructions = data?.instructions || '';
   const suggested    = !!data?.suggested;
   S.convPageId    = data?.notion_page_id || null;
@@ -348,11 +356,13 @@ function saveConv() {
   setTimeout(() => { btn.innerHTML = 'Sauvegarder'; btn.disabled = false; }, 2000);
 
   // Sync en arrière-plan
+  const convId = S.conversationId;
   callProxy('upsert_conv', {
     missive_conversation_id: S.conversationId,
     text,
     ...(S.convPageId ? { page_id: S.convPageId } : {}),
   }).then(r => {
+    if (convId !== S.conversationId) return;  // conv changée : ne pas contaminer S.convPageId
     if (r?.notion_page_id) S.convPageId = r.notion_page_id;
     if (!r?.success) {
       console.warn('[POF] upsert_conv failed:', r);
@@ -886,7 +896,12 @@ async function handleConversation(id, conversation) {
   S.convOrigText   = '';
   S.convSuggested  = false;
   S.mainNotion     = null;
+  // Annule une éventuelle ouverture de popup signature armée pour la conv précédente.
+  if (S._odooSignTimer) { clearTimeout(S._odooSignTimer); S._odooSignTimer = null; }
   TaskState._userExpanded = false;
+  // Vide les tâches de la conv précédente (sinon elles restent affichées le temps du load).
+  TaskState.tasks    = [];
+  TaskState.proposed = [];
   // Reset de l'onglet Actions (sinon la synthèse/timeline de la conv précédente persiste)
   TimelineState.situation    = null;
   TimelineState.upcoming     = [];
@@ -920,7 +935,10 @@ async function handleConversation(id, conversation) {
 
   // Auto-ouvre la popup de signature Odoo dès que l'email est une demande de signature
   if (isOdooSignRequest()) {
-    setTimeout(() => {
+    S._odooSignTimer = setTimeout(() => {
+      S._odooSignTimer = null;
+      // Revérifier : l'utilisateur a pu changer de conversation pendant le délai de 500 ms.
+      if (id !== S.conversationId || !isOdooSignRequest()) return;
       openSheet('signature');
       showOdooSignConfirm(document.getElementById('fa-signature'));
     }, 500);
@@ -1157,6 +1175,7 @@ function openSheet(kind) {
 function closeSheet() {
   const sheet = document.getElementById('footer-sheet');
   if (!sheet) return;
+  stopOdooSignProgress();  // stoppe les timers de progression si le sheet signature était ouvert
   sheet.setAttribute('hidden', '');
   document.querySelectorAll('.footer-action').forEach(b => b.classList.remove('active'));
 }
@@ -1365,10 +1384,13 @@ function showOdooSignConfirm(footerBtn) {
       nom: 'Benoit BLANCHER',
     }).then(r => {
       stopOdooSignProgress();
-      if (r && r.success === false) {
-        showOdooSignResult(false, r.error || 'Erreur lors de la signature', docName, footerBtn);
-      } else {
+      // Succès UNIQUEMENT si success === true. callProxy renvoie {error} SANS champ
+      // success sur erreur réseau/HTTP/JSON/token : l'ancien test `success === false`
+      // ne matchait pas et affichait « Document signé » alors que rien n'était signé.
+      if (r && r.success === true) {
         showOdooSignResult(true, null, docName, footerBtn);
+      } else {
+        showOdooSignResult(false, (r && r.error) || 'Erreur lors de la signature', docName, footerBtn);
       }
     }).catch(() => {
       stopOdooSignProgress();
@@ -1944,6 +1966,7 @@ async function loadTasks(convId) {
     callProxy('list_tasks', { conversation_id: convId }),
     callProxy('list_proposed_tasks', { conversation_id: convId }),
   ]);
+  if (convId !== S.conversationId) return;  // conversation changée pendant le chargement
   TaskState.tasks    = Array.isArray(r?.tasks) ? r.tasks : [];
   TaskState.proposed = Array.isArray(p?.proposed) ? p.proposed : [];
   renderTasks();
@@ -1990,7 +2013,7 @@ function renderProposed() {
           </div>
         </div>
         <div class="proposed-meta">
-          <span class="task-prio ${t.prio.toLowerCase()}">${esc(t.prio)}</span>
+          <span class="task-prio ${esc((t.prio || 'P1').toLowerCase())}">${esc(t.prio || 'P1')}</span>
           <span class="meta-item ${overdue ? 'overdue' : ''}">${icon('calendar')} ${esc(dueLabel)}</span>
           ${assignee}
         </div>
@@ -2119,7 +2142,7 @@ function renderTasks() {
         <div class="task-info">
           <div class="task-name">${esc(t.name)}</div>
           <div class="task-meta">
-            <span class="task-prio ${t.prio.toLowerCase()}">${esc(t.prio)}</span>
+            <span class="task-prio ${esc((t.prio || 'P1').toLowerCase())}">${esc(t.prio || 'P1')}</span>
             <span class="meta-item ${overdue ? 'overdue' : ''}">
               ${icon('calendar')} ${esc(dueLabel)}
             </span>
@@ -3277,11 +3300,11 @@ function renderSources() {
       <div class="source-item" data-src-id="${esc(s.id)}">
         <span class="src-icon" data-type="${esc(s.type)}">${SOURCE_ICON[s.type] || SOURCE_ICON.web}</span>
         <div class="src-body">
-          <a class="src-name" href="${esc(s.url || '#')}" target="_blank" rel="noopener">${esc(s.name)}</a>
+          <a class="src-name" href="${esc(safeHref(s.url))}" target="_blank" rel="noopener">${esc(s.name)}</a>
           ${s.subtitle ? `<div class="src-sub">${esc(s.subtitle)}</div>` : ''}
           ${s.meta ? `<div class="src-meta">${esc(s.meta)}</div>` : ''}
         </div>
-        <a class="src-open" href="${esc(s.url || '#')}" target="_blank" rel="noopener" title="Ouvrir le lien" aria-label="Ouvrir ${esc(s.name)}">
+        <a class="src-open" href="${esc(safeHref(s.url))}" target="_blank" rel="noopener" title="Ouvrir le lien" aria-label="Ouvrir ${esc(s.name)}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2 -9.2"/><path d="M7 7h10v10"/></svg>
         </a>
         <button class="src-action ${s.watched ? 'watched' : ''}" data-src-action="${esc(s.id)}"
@@ -3304,7 +3327,21 @@ function renderSources() {
       b.setAttribute('aria-pressed', s.watched ? 'true' : 'false');
       b.innerHTML = s.watched ? icon('check') + ' ' + doneLabel : icon('plus') + ' ' + actionLabel;
       toast(s.watched ? `Ajouté à la veille : ${s.name}` : `Retiré de la veille : ${s.name}`);
-      callProxy('follow_source', { source_id: id, watched: s.watched, conversation_id: S.conversationId });
+      // Le backend follow_source résout le contact via ces champs (sinon « contact non
+      // identifié ») et n'a pas de chemin de retrait : on n'appelle qu'à l'activation.
+      if (s.watched) {
+        callProxy('follow_source', {
+          source_id: id,
+          source_type: s.type,
+          watched: true,
+          conversation_id: S.conversationId,
+          contact_page_id: S.mainNotion?.notion_page_id,
+          contact_email: S.main?.email,
+          contact_name: S.main?.name,
+        }).then(r => {
+          if (r && r.success === false) toast(r.error || 'Échec ajout à la veille', 'error');
+        });
+      }
     });
   });
 }
@@ -3411,6 +3448,7 @@ function sendAgentMessage() {
   AgentState.messages.push({ role: 'agent', text: '', ts: Date.now(), _thinking: true });
   renderAgentMessages();
 
+  const convId = S.conversationId;
   callProxy('ask_agent', {
     prompt: text,
     conversation_id: S.conversationId,
@@ -3419,6 +3457,14 @@ function sendAgentMessage() {
   }).then(r => {
     // Remove thinking
     AgentState.messages = AgentState.messages.filter(m => !m._thinking);
+    // Erreur backend : l'afficher au lieu d'un faux « OK, j'ai pris en compte ta demande ».
+    if (r?.error) {
+      AgentState.messages.push({ role: 'agent', text: 'Désolé, une erreur est survenue : ' + r.error, ts: Date.now() });
+      AgentState.sending = false;
+      renderAgentMessages();
+      updateAgentPreview();
+      return;
+    }
     const reply = r?.reply || (r?.situation
       ? "Synthèse mise à jour. J'ai aussi régénéré les tâches suggérées dans l'onglet Actions."
       : "OK, j'ai pris en compte ta demande. Les éléments sont mis à jour dans les onglets concernés.");
@@ -3426,7 +3472,9 @@ function sendAgentMessage() {
     AgentState.sending = false;
     renderAgentMessages();
     updateAgentPreview();
-    // Side-effects: if the agent updated the situation or proposed tasks, refresh views
+    // Side-effects : n'appliquer à la situation/aux tâches que si la conversation n'a pas
+    // changé pendant la réponse (sinon on contamine la nouvelle conv avec les données de l'ancienne).
+    if (convId !== S.conversationId) return;
     if (r?.situation) {
       TimelineState.situation = r.situation;
       renderSituationNote();
